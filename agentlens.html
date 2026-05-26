@@ -1,0 +1,3280 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentLens — AI Context Cost Scanner</title>
+<meta name="description" content="Scan any GitHub repo to detect AI agent config files (AGENTS.md, CLAUDE.md, .cursorrules, copilot-instructions), resolve referenced files, and calculate the real context cost per request across all major LLM providers.">
+<meta name="author" content="AgentLens">
+<meta name="theme-color" content="#2547f4">
+<meta property="og:title" content="AgentLens — AI Context Cost Scanner">
+<meta property="og:description" content="Detect AI agent configs in any repo. Calculate real context token costs across Claude, GPT, Gemini. Dedup shared references. Project team-wide spending.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AgentLens — AI Context Cost Scanner">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%25' stop-color='%232547f4'/><stop offset='100%25' stop-color='%2322d3ee'/></linearGradient></defs><circle cx='42' cy='42' r='28' fill='none' stroke='url(%23g)' stroke-width='8'/><line x1='62' y1='62' x2='90' y2='90' stroke='url(%23g)' stroke-width='10' stroke-linecap='round'/><circle cx='42' cy='42' r='12' fill='%232547f4' opacity='.3'/></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --blue:#2547f4;--blue-d:#1a35c7;
+  --cyan:#22d3ee;
+  --green:#10b981;
+  --orange:#f59e0b;
+  --red:#ef4444;
+  --purple:#8b5cf6;
+  --yellow:#f59e0b;
+  --teal:#14b8a6;
+  --pink:#ec4899;
+}
+/* ── Dark theme (default) ── */
+[data-theme="dark"]{
+  --blue-l:rgba(37,71,244,.15);
+  --cyan-l:rgba(34,211,238,.15);
+  --green-l:rgba(16,185,129,.15);
+  --orange-l:rgba(245,158,11,.15);
+  --red-l:rgba(239,68,68,.15);
+  --purple-l:rgba(139,92,246,.15);
+  --yellow-l:rgba(245,158,11,.15);
+  --teal-l:rgba(20,184,166,.15);
+  --pink-l:rgba(236,72,153,.15);
+  --bg:#080c18;
+  --card:#0f1629;
+  --card-alt:#0b1020;
+  --card-border:rgba(255,255,255,.07);
+  --card-border-hover:rgba(37,71,244,.45);
+  --g50:#0b1020;--g100:#111827;--g200:rgba(255,255,255,.08);--g300:rgba(255,255,255,.14);
+  --g400:#475569;--g500:#64748b;--g700:#94a3b8;--g900:#e2e8f0;
+  --hero-bg:linear-gradient(160deg,#0a0f22 0%,#0d1535 50%,#0a0f22 100%);
+  --hero-glow:rgba(37,71,244,.18);
+  --hero-text:#fff;
+  --hero-border:rgba(255,255,255,.07);
+  --toggle-bg:rgba(255,255,255,.07);
+  --toggle-active-bg:rgba(37,71,244,.35);
+  --toggle-color:rgba(255,255,255,.5);
+  --toggle-active-color:#fff;
+  --theme-icon:"☀️";
+}
+/* ── Light theme ── */
+[data-theme="light"]{
+  --blue-l:#eff6ff;
+  --cyan-l:#ecfeff;
+  --green-l:#f0fdf4;
+  --orange-l:#fff7ed;
+  --red-l:#fef2f2;
+  --purple-l:#faf5ff;
+  --yellow-l:#fefce8;
+  --teal-l:#f0fdfa;
+  --pink-l:#fdf2f8;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --card-alt:#f8fafc;
+  --card-border:#e2e8f0;
+  --card-border-hover:#bfdbfe;
+  --g50:#f8fafc;--g100:#f1f5f9;--g200:#e2e8f0;--g300:#cbd5e1;
+  --g400:#94a3b8;--g500:#64748b;--g700:#475569;--g900:#1e293b;
+  --hero-bg:linear-gradient(160deg,#1e3a8a 0%,#2547f4 55%,#1d4ed8 100%);
+  --hero-glow:rgba(37,71,244,.25);
+  --hero-text:#fff;
+  --hero-border:rgba(255,255,255,.15);
+  --toggle-bg:rgba(255,255,255,.15);
+  --toggle-active-bg:rgba(255,255,255,.3);
+  --toggle-color:rgba(255,255,255,.7);
+  --toggle-active-color:#fff;
+  --theme-icon:"🌙";
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--g900);line-height:1.6}
+.hero{background:var(--hero-bg);color:var(--hero-text);padding:14px 20px;position:relative;border-bottom:1px solid var(--hero-border)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 50% 0%,var(--hero-glow) 0%,transparent 70%);pointer-events:none}
+.hero-inner{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:16px;align-items:center;position:relative;z-index:1}
+.brand-lockup{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#93c5fd,var(--cyan));box-shadow:0 0 18px rgba(34,211,238,.35)}
+.brand-name{font-size:1rem;font-weight:800;letter-spacing:-.04em;color:#fff;white-space:nowrap}
+.hero-sub{display:none}
+.hero-controls{display:flex;align-items:center;gap:8px;justify-self:end}
+.lang-toggle{display:flex;gap:0;background:var(--toggle-bg);border:1px solid var(--hero-border);border-radius:8px;overflow:hidden}
+.lang-btn{padding:6px 14px;font-size:.8rem;font-weight:700;color:var(--toggle-color);background:none;border:none;cursor:pointer;transition:.15s}
+.lang-btn.active{background:var(--toggle-active-bg);color:var(--toggle-active-color)}
+.theme-toggle-btn{background:var(--toggle-bg);border:1px solid var(--hero-border);border-radius:8px;padding:6px 10px;font-size:.88rem;cursor:pointer;transition:.15s;line-height:1}
+.container{max-width:980px;margin:0 auto;padding:0 20px}
+.input-section{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:28px 32px;margin:0 auto 24px;max-width:800px;position:relative;z-index:10}
+.input-label{font-size:.78rem;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:block}
+.input-row{display:flex;gap:10px}
+.repo-input{flex:1;padding:12px 16px;border:1px solid var(--card-border);border-radius:8px;font-size:.95rem;outline:none;color:var(--g900);background:var(--card-alt);font-family:'Space Grotesk',sans-serif;transition:.2s}
+.repo-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,71,244,.2)}
+.fetch-btn{padding:12px 22px;background:linear-gradient(135deg,var(--blue-d),var(--blue));color:#fff;border:none;border-radius:8px;font-size:.92rem;font-weight:700;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:7px;font-family:'Space Grotesk',sans-serif;transition:.2s;box-shadow:0 0 20px rgba(37,71,244,.3)}
+.fetch-btn:hover{box-shadow:0 0 28px rgba(37,71,244,.5);transform:translateY(-1px)}
+.fetch-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.examples{margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.examples span{font-size:.78rem;color:var(--g500);font-weight:600}
+.example-chip{background:rgba(37,71,244,.12);color:var(--cyan);border:1px solid rgba(34,211,238,.2);border-radius:99px;padding:2px 11px;font-size:.76rem;font-weight:600;cursor:pointer;transition:.15s}
+.example-chip:hover{background:rgba(34,211,238,.15);border-color:var(--cyan)}
+/* STATUS */
+#status-area{margin-bottom:20px}
+.status-card{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:12px;font-weight:600;font-size:.92rem}
+.status-card.loading{border-left:3px solid var(--blue)}
+.status-card.error{border-left:3px solid var(--red)}
+.status-card.warn{border-left:3px solid var(--yellow)}
+.spinner{width:18px;height:18px;border:2px solid rgba(37,71,244,.25);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* MAIN TABS */
+.main-tabs{display:flex;gap:0;margin-bottom:24px;background:var(--card);border:1px solid var(--card-border);border-radius:12px;overflow:hidden}
+.main-tab{flex:1;padding:13px;text-align:center;font-weight:700;font-size:.9rem;cursor:pointer;border:none;background:none;color:var(--g500);transition:.2s;border-bottom:2px solid transparent;font-family:'Space Grotesk',sans-serif}
+.main-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.main-tab:hover:not(.active){color:var(--g700);background:rgba(255,255,255,.03)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+/* STATS */
+.stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--card-border);border-radius:10px;padding:16px;text-align:center}
+.stat-num{font-size:1.65rem;font-weight:800;line-height:1;margin-bottom:3px}
+.stat-label{font-size:.7rem;color:var(--g500);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.stat-card.blue .stat-num{color:var(--blue)}.stat-card.green .stat-num{color:var(--green)}.stat-card.purple .stat-num{color:var(--purple)}.stat-card.orange .stat-num{color:var(--orange)}.stat-card.teal .stat-num{color:var(--teal)}.stat-card.pink .stat-num{color:var(--pink)}
+/* TOOL GRID */
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:24px}
+.tool-card{background:var(--card);border:1px solid var(--card-border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:10px;transition:.2s}
+.tool-card.found{border-color:rgba(16,185,129,.35);box-shadow:0 0 12px rgba(16,185,129,.08)}.tool-card.missing{opacity:.3}
+.tool-icon{font-size:1.3rem;flex-shrink:0}
+.tool-info .tool-name{font-weight:700;font-size:.84rem;margin-bottom:1px;color:var(--g900)}
+.tool-info .tool-file{font-family:monospace;font-size:.72rem;color:var(--g500)}
+.found-dot{width:8px;height:8px;border-radius:50%;background:var(--green);margin-left:auto;flex-shrink:0;box-shadow:0 0 6px var(--green)}
+[data-theme="light"] .found-dot{box-shadow:none}
+[data-theme="light"] .tool-card.found{box-shadow:none}
+.miss-dot{width:8px;height:8px;border-radius:50%;background:var(--g400);margin-left:auto;flex-shrink:0}
+/* SECTION */
+.section{padding:0 0 28px}
+.section-header{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.section-header h2{font-size:1rem;font-weight:800;color:var(--g900)}
+.pill{border-radius:99px;padding:2px 10px;font-size:.7rem;font-weight:700;background:var(--blue-l);color:var(--blue);border:1px solid rgba(37,71,244,.25)}
+.pill.green{background:var(--green-l);color:var(--green);border-color:rgba(16,185,129,.25)}
+.pill.teal{background:var(--teal-l);color:var(--teal);border-color:rgba(20,184,166,.25)}
+/* CONTEXT TREE */
+.context-tree{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:18px;margin-bottom:24px;font-family:monospace;font-size:.84rem}
+.tree-item{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px dashed var(--g200)}
+.tree-item:last-child{border-bottom:none}
+.t-path{flex:1;color:var(--cyan)}.t-path.root{color:var(--g900);font-weight:700}.t-path.dedup{color:var(--g400);text-decoration:line-through}
+.t-right{display:flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0}
+.t-tok{color:var(--g500);font-size:.73rem}
+.t-tool{font-size:.67rem;padding:1px 7px;border-radius:99px;font-weight:700}
+/* FILE BLOCKS */
+.agent-file-block{background:var(--card);border:1px solid var(--card-border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.agent-file-header{background:var(--card-alt);border-bottom:1px solid var(--card-border);padding:13px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;cursor:pointer;user-select:none;transition:.15s}
+.agent-file-header:hover{background:rgba(37,71,244,.1)}
+.agent-file-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.88rem}
+.file-badge{background:rgba(37,71,244,.2);color:var(--cyan);border:1px solid rgba(34,211,238,.2);border-radius:5px;padding:2px 9px;font-family:monospace;font-size:.74rem;font-weight:600}
+.agent-file-body{display:none}.agent-file-body.open{display:block}
+.tab-bar{display:flex;border-bottom:1px solid var(--card-border);padding:0 18px;background:var(--card)}
+.tab-btn{padding:10px 14px;border:none;background:none;cursor:pointer;font-size:.84rem;font-weight:600;color:var(--g500);border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s;font-family:'Space Grotesk',sans-serif}
+.tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab-content{display:none;padding:18px}.tab-content.active{display:block}
+.md-body{line-height:1.75;color:var(--g700)}.md-body h1,.md-body h2,.md-body h3{color:var(--g900);font-weight:800;margin:18px 0 6px}
+.md-body h1{font-size:1.3rem}.md-body h2{font-size:1.05rem}.md-body h3{font-size:.95rem}
+.md-body p{margin-bottom:10px}.md-body ul,.md-body ol{margin:6px 0 10px 18px}.md-body li{margin-bottom:3px}
+.md-body code{background:rgba(139,92,246,.15);border-radius:4px;padding:1px 5px;font-family:monospace;font-size:.86em;color:var(--purple)}
+.md-body pre{background:#060a14;color:#e2e8f0;border:1px solid var(--card-border);border-radius:8px;padding:16px;overflow-x:auto;margin:12px 0;font-family:monospace;font-size:.84em;line-height:1.6}
+.md-body pre code{background:none;color:inherit;padding:0}.md-body a{color:var(--cyan)}
+.md-body blockquote{border-left:3px solid rgba(37,71,244,.5);background:rgba(37,71,244,.07);padding:10px 14px;margin:10px 0;border-radius:0 6px 6px 0}
+.raw-code{background:#060a14;color:#e2e8f0;border:1px solid var(--card-border);border-radius:8px;padding:18px;overflow-x:auto;font-family:monospace;font-size:.82em;line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow-y:auto}
+/* REFS */
+.refs-grid{display:flex;flex-direction:column;gap:10px;margin-bottom:24px}
+.ref-card{background:var(--card);border:1px solid var(--card-border);border-radius:10px;overflow:hidden;border-left:3px solid var(--blue)}
+.ref-card.not-found{border-left-color:var(--g400);opacity:.55}
+.ref-card.heavy{border-left-color:var(--orange);border-color:rgba(245,158,11,.3)}
+.ref-tag.heavy{background:var(--orange-l);color:var(--orange)}
+.heavy-warn-panel{border-top:1px solid rgba(245,158,11,.25);background:rgba(245,158,11,.05);padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.heavy-warn-intro{font-size:.82rem;color:var(--orange);font-weight:600;display:flex;align-items:flex-start;gap:7px}
+.heavy-warn-intro span{line-height:1.5}
+.heavy-fixes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:900px){.heavy-fixes{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.heavy-fixes{grid-template-columns:1fr}}
+.heavy-fix{background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:11px 13px;display:flex;flex-direction:column;gap:5px}
+.heavy-fix-title{font-size:.78rem;font-weight:700;color:var(--g900)}
+.heavy-fix-desc{font-size:.75rem;color:var(--g500);line-height:1.45}
+.heavy-fix-code{font-family:monospace;font-size:.72rem;background:var(--g50);border:1px solid var(--g200);border-radius:5px;padding:7px 9px;white-space:pre;overflow-x:auto;color:var(--g700);margin-top:2px;line-height:1.5}
+.ref-card-header{padding:11px 16px;background:var(--card-alt);border-bottom:1px solid var(--card-border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer;user-select:none;transition:.15s}
+.ref-card-header:hover{background:rgba(37,71,244,.1)}
+.ref-path{font-family:monospace;font-size:.84rem;font-weight:700;color:var(--g900)}
+.ref-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ref-tag{border-radius:99px;padding:1px 9px;font-size:.7rem;font-weight:700;text-transform:uppercase}
+.ref-tag.found{background:var(--green-l);color:var(--green)}.ref-tag.missing{background:var(--red-l);color:var(--red)}
+.ref-tag.type{background:var(--purple-l);color:var(--purple)}.ref-tag.shared{background:var(--teal-l);color:var(--teal)}
+.token-badge{background:var(--blue-l);color:var(--blue);border:1px solid rgba(37,71,244,.25);border-radius:99px;padding:2px 9px;font-size:.72rem;font-weight:700}
+.ref-content{padding:0 16px;max-height:0;overflow:hidden;transition:max-height .3s,padding .3s}
+.ref-content.open{max-height:520px;padding:16px;overflow-y:auto}
+/* COST TAB */
+.cost-section{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:22px;margin-bottom:18px}
+.cost-section h3{font-size:.95rem;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px;color:var(--g900)}
+.controls-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+@media(max-width:600px){.controls-grid{grid-template-columns:1fr}}
+.control-group label{display:block;font-size:.76rem;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.control-group select,.control-group input[type=number]{width:100%;padding:9px 12px;border:1px solid var(--card-border);border-radius:8px;font-size:.88rem;outline:none;background:var(--card-alt);color:var(--g900);font-family:'Space Grotesk',sans-serif;transition:.2s}
+.control-group select:focus,.control-group input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,71,244,.15)}
+.control-group select option{background:#0f1629;color:var(--g900)}
+.slider-group{margin-bottom:14px}
+.slider-group label{display:flex;justify-content:space-between;font-size:.76rem;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.slider-group label span.val{color:var(--cyan);font-size:.9rem}
+input[type=range]{width:100%;accent-color:var(--blue);height:6px;cursor:pointer}
+.toggle-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.toggle-row label{font-size:.82rem;font-weight:600;color:var(--g700)}
+.toggle{position:relative;width:44px;height:24px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:var(--g400);border-radius:24px;transition:.2s}
+.toggle .slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:var(--blue)}
+.toggle input:checked+.slider:before{transform:translateX(20px)}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
+.kpi{background:var(--card-alt);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--card-border)}
+.kpi .k-num{font-size:1.45rem;font-weight:800;line-height:1;margin-bottom:2px}
+.kpi .k-label{font-size:.7rem;color:var(--g500);font-weight:600;text-transform:uppercase}
+.kpi.blue .k-num{color:var(--blue)}.kpi.green .k-num{color:var(--green)}.kpi.orange .k-num{color:var(--orange)}.kpi.red .k-num{color:var(--red)}.kpi.purple .k-num{color:var(--purple)}
+.chart-box{position:relative;width:100%;height:280px;margin-bottom:14px}
+.comparison-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:8px}
+.comparison-table th{background:var(--card-alt);font-weight:700;text-align:left;padding:10px 12px;border-bottom:1px solid var(--card-border);color:var(--g700)}
+.comparison-table td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--g900)}
+.comparison-table tr:hover td{background:rgba(37,71,244,.07)}
+.comparison-table th.sortable:hover{color:var(--cyan);cursor:pointer}
+.comparison-table .num{text-align:right;font-family:monospace;font-weight:600}
+.savings-banner{background:rgba(20,184,166,.1);border:1px solid rgba(20,184,166,.3);border-radius:10px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.savings-banner .s-icon{font-size:1.6rem;flex-shrink:0}
+.savings-banner .s-body{flex:1}
+.savings-banner .s-title{font-weight:800;font-size:.88rem;color:var(--teal)}
+.savings-banner .s-detail{font-size:.82rem;color:var(--g700)}
+.savings-banner .s-num{font-size:1.3rem;font-weight:800;color:var(--teal);white-space:nowrap}
+.empty-state{text-align:center;padding:50px 20px;color:var(--g500)}
+.empty-state .icon{font-size:2.8rem;margin-bottom:12px}
+.empty-state h3{font-size:.95rem;font-weight:700;color:var(--g700);margin-bottom:6px}
+.empty-state p{font-size:.86rem;max-width:380px;margin:0 auto}
+footer{text-align:center;padding:28px 20px;color:var(--g500);font-size:.78rem;border-top:1px solid var(--card-border)}
+footer a{color:var(--g500);text-decoration:none}.footer a:hover{color:var(--cyan)}
+.hidden{display:none!important}
+/* LOCAL MODE BANNER */
+.local-banner{background:linear-gradient(135deg,rgba(37,71,244,.25),rgba(37,71,244,.1));color:#fff;border:1px solid rgba(37,71,244,.35);border-radius:12px;padding:16px 22px;margin-bottom:18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:0 4px 20px rgba(37,71,244,.15)}
+.local-banner .lb-icon{font-size:1.8rem;flex-shrink:0}
+.local-banner .lb-body{flex:1}
+.local-banner .lb-title{font-weight:800;font-size:.95rem;margin-bottom:3px}
+.local-banner .lb-meta{font-size:.78rem;opacity:.7;font-family:monospace}
+.local-banner .lb-badge{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15);border-radius:99px;padding:3px 12px;font-size:.72rem;font-weight:700;white-space:nowrap}
+.local-repo-tab{background:var(--card-alt);border:1px solid var(--card-border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:.15s;margin-bottom:8px}
+.local-repo-tab:hover{border-color:rgba(37,71,244,.4);background:rgba(37,71,244,.08)}
+.local-repo-tab.active{border-color:var(--blue);background:var(--blue-l)}
+.local-repo-tab .lrt-name{font-family:monospace;font-weight:700;font-size:.88rem;color:var(--g900)}
+.local-repo-tab .lrt-tok{font-size:.76rem;color:var(--g500);font-weight:600}
+/* AREA NAV */
+.area-nav{display:flex;gap:6px;padding:4px;background:var(--toggle-bg);border:1px solid var(--hero-border);border-radius:12px;overflow:auto;scrollbar-width:none}
+.area-nav::-webkit-scrollbar{display:none}
+.area-tab{flex:0 0 auto;padding:10px 14px;text-align:center;font-weight:700;font-size:.82rem;cursor:pointer;border:none;background:none;color:var(--toggle-color);transition:.2s;border-radius:8px;font-family:'Space Grotesk',sans-serif;white-space:nowrap}
+.area-tab.active{color:#fff;background:var(--toggle-active-bg)}
+.area-tab:hover:not(.active){color:#fff;background:rgba(255,255,255,.08)}
+/* RESULT HEADER */
+.result-overview{display:grid;gap:14px;margin-bottom:18px}
+.result-header{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:20px 22px;display:grid;gap:16px}
+.rh-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start}
+.rh-title{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
+.rh-name{font-size:1.18rem;font-weight:800;color:var(--g900);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rh-support{font-size:.76rem;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.rh-bottom{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:end}
+.rh-kpi{display:flex;flex-direction:column;gap:5px}
+.rh-kpi-label{font-size:.76rem;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.05em}
+.rh-tokens{font-family:monospace;font-size:1.6rem;font-weight:800;color:var(--cyan);white-space:nowrap;line-height:1}
+.health-badge{border-radius:99px;padding:3px 12px;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.health-badge.ok{background:var(--green-l);color:var(--green)}
+.health-badge.warn{background:var(--yellow-l);color:var(--orange)}
+.health-badge.max{background:var(--red-l);color:var(--red)}
+.rh-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+/* COVERAGE MATRIX */
+.coverage-matrix{background:var(--card);border:1px solid var(--card-border);border-radius:12px;overflow:hidden}
+.coverage-matrix-title{padding:12px 18px;background:var(--card-alt);border-bottom:1px solid var(--card-border);font-size:.8rem;font-weight:800;color:var(--g700);text-transform:uppercase;letter-spacing:.05em}
+.coverage-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.coverage-table th{padding:10px 14px;text-align:center;font-size:.7rem;font-weight:700;color:var(--g500);border-bottom:1px solid var(--card-border);white-space:nowrap;background:var(--card-alt)}
+.coverage-table th:first-child{text-align:left;min-width:120px}
+.coverage-table td{padding:9px 14px;text-align:center;border-bottom:1px solid rgba(255,255,255,.04)}
+.coverage-table td:first-child{text-align:left;font-family:monospace;font-weight:700;font-size:.82rem;color:var(--g900)}
+.coverage-dot{display:inline-block;width:10px;height:10px;border-radius:50%}
+@media(max-width:760px){
+  .result-header{padding:18px}
+  .rh-top,.rh-bottom{grid-template-columns:1fr}
+  .rh-name{white-space:normal}
+  .rh-support{white-space:normal}
+  .rh-actions{justify-content:stretch}
+  .rh-actions .action-btn{flex:1;min-width:160px}
+}
+@media(max-width:520px){
+  .rh-tokens{font-size:1.3rem}
+  .rh-actions .action-btn{width:100%;min-width:0}
+}
+/* SCENARIO CARDS */
+.scenario-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:640px){.scenario-cards{grid-template-columns:1fr}}
+.scenario-card{background:var(--card-alt);border:2px solid var(--card-border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:.2s;text-align:center}
+.scenario-card:hover{border-color:rgba(37,71,244,.4);background:var(--blue-l)}
+.scenario-card.active{border-color:var(--blue);background:var(--blue-l)}
+.scenario-name{font-size:.78rem;font-weight:800;color:var(--g700);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.scenario-desc{font-size:.74rem;color:var(--g500);margin-bottom:8px}
+.scenario-cost{font-size:1.1rem;font-weight:800;color:var(--blue);line-height:1}
+.scenario-cost-label{font-size:.68rem;color:var(--g400);margin-top:2px}
+/* SNAPSHOT TIMELINE */
+.snapshot-timeline{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:20px 22px}
+.snapshot-timeline-title{font-size:.82rem;font-weight:800;color:var(--g500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px}
+.snapshot-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px dashed var(--g200)}
+.snapshot-row:last-child{border-bottom:none}
+.snapshot-date{font-size:.76rem;color:var(--g500);white-space:nowrap;min-width:130px}
+.snapshot-repo{font-family:monospace;font-weight:700;font-size:.84rem;color:var(--cyan);flex:1}
+.snapshot-tok{font-family:monospace;font-size:.84rem;font-weight:700;color:var(--g900);white-space:nowrap}
+.snapshot-delta{border-radius:99px;padding:1px 8px;font-size:.7rem;font-weight:700;white-space:nowrap}
+.snapshot-delta.up{background:var(--red-l);color:var(--red)}
+.snapshot-delta.down{background:var(--green-l);color:var(--green)}
+.snapshot-delta.same{background:var(--g200);color:var(--g500)}
+/* SCATTER SECTION */
+.scatter-section{margin-bottom:18px}
+/* ORG AREA CARD */
+.org-area-card{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:24px 28px;margin-top:20px;margin-bottom:16px}
+/* COMPARE SECTION */
+.compare-card{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:24px 28px;margin-bottom:20px}
+.compare-queue{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.compare-repo-chip{display:flex;align-items:center;justify-content:space-between;background:rgba(37,71,244,.1);border:1px solid rgba(37,71,244,.25);border-radius:8px;padding:10px 14px}
+.compare-repo-chip .crep-name{font-family:monospace;font-size:.88rem;font-weight:700;color:var(--cyan)}
+.compare-repo-chip .crep-status{font-size:.75rem;color:var(--g500);margin-left:8px}
+.crep-right{display:flex;align-items:center;gap:8px}
+.remove-chip{background:none;border:none;cursor:pointer;color:var(--g500);font-size:1rem;padding:2px 6px;border-radius:6px;transition:.15s;line-height:1}
+.remove-chip:hover{background:var(--red-l);color:var(--red)}
+.compare-run-btn{width:100%;padding:14px;background:transparent;color:var(--cyan);border:1px solid rgba(34,211,238,.5);border-radius:8px;font-size:.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:.2s;margin-top:18px;font-family:'Space Grotesk',sans-serif;box-shadow:0 0 20px rgba(34,211,238,.12),inset 0 0 20px rgba(34,211,238,.04)}
+.compare-run-btn:hover:not(:disabled){border-color:var(--cyan);box-shadow:0 0 30px rgba(34,211,238,.25),inset 0 0 30px rgba(34,211,238,.08);color:#fff}
+.compare-run-btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+[data-theme="light"] .compare-run-btn{background:var(--blue);color:#fff;border-color:var(--blue);box-shadow:0 4px 14px rgba(37,71,244,.3)}
+[data-theme="light"] .compare-run-btn:hover:not(:disabled){background:var(--blue-d);box-shadow:0 6px 20px rgba(37,71,244,.4);color:#fff}
+[data-theme="light"] .compare-run-btn:disabled{box-shadow:none}
+.cmp-hint{font-size:.78rem;color:var(--g500);text-align:center;margin-top:10px}
+.compare-result-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.compare-result-table th{background:var(--card-alt);font-weight:700;text-align:left;padding:10px 12px;border-bottom:1px solid var(--card-border);color:var(--g700)}
+.compare-result-table td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;color:var(--g900)}
+.compare-result-table tr:hover td{background:rgba(37,71,244,.07)}
+.compare-result-table .num{text-align:right;font-family:monospace;font-weight:600}
+/* ── Org Scan Panel ── */
+#org-scan-panel{margin-top:16px}
+.org-progress-card{background:var(--card);border-radius:12px;padding:18px 22px;border:1px solid var(--card-border)}
+.org-progress-bar-wrap{background:var(--g200);border-radius:99px;height:6px;margin:12px 0 8px;overflow:hidden}
+.org-progress-bar{height:6px;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--cyan));transition:width .3s;box-shadow:0 0 8px rgba(34,211,238,.4)}
+[data-theme="light"] .org-progress-bar{box-shadow:none}
+.org-section-header{display:flex;align-items:center;gap:10px;margin:20px 0 10px;flex-wrap:wrap}
+.org-section-title{font-size:.92rem;font-weight:800;color:var(--g900)}
+.org-badge{background:var(--blue);color:#fff;border-radius:99px;padding:2px 9px;font-size:.7rem;font-weight:800}
+.org-badge.gray{background:var(--g400);color:var(--bg)}
+.org-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.org-sort-btn{padding:5px 11px;border:1px solid var(--card-border);border-radius:8px;font-size:.76rem;font-weight:700;background:var(--card-alt);color:var(--g700);cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:.15s}
+.org-sort-btn.active{border-color:var(--blue);background:var(--blue-l);color:var(--cyan)}
+.org-select-btn{padding:5px 11px;border:1px solid var(--card-border);border-radius:8px;font-size:.76rem;font-weight:700;background:var(--card-alt);color:var(--g700);cursor:pointer;font-family:'Space Grotesk',sans-serif}
+.org-table{width:100%;border-collapse:collapse;font-size:.84rem}
+.org-table th{text-align:left;padding:8px 10px;font-size:.7rem;font-weight:800;color:var(--g500);text-transform:uppercase;border-bottom:1px solid var(--card-border);white-space:nowrap}
+.org-table th.num{text-align:right}
+.org-table td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:top;color:var(--g900)}
+.org-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.org-table tr:last-child td{border-bottom:none}
+.org-table tr:hover td{background:rgba(255,255,255,.03)}
+.org-repo-name{font-weight:700;color:var(--cyan);text-decoration:none;font-size:.86rem}
+.org-repo-name:hover{text-decoration:underline}
+.org-repo-desc{font-size:.74rem;color:var(--g400);margin-top:2px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.org-repo-lang{display:inline-block;font-size:.68rem;padding:1px 6px;border-radius:99px;background:rgba(255,255,255,.07);color:var(--g500);font-weight:700;margin-top:3px}
+.org-pagination{display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap}
+.org-page-btn{padding:5px 12px;border:1px solid var(--card-border);border-radius:8px;font-size:.8rem;font-weight:700;background:var(--card-alt);color:var(--g700);cursor:pointer;font-family:'Space Grotesk',sans-serif}
+.org-page-btn:disabled{opacity:.35;cursor:default}
+.org-page-info{font-size:.8rem;color:var(--g500);font-weight:600}
+.org-unconfigured-toggle{background:none;border:none;cursor:pointer;font-size:.8rem;font-weight:700;color:var(--g500);padding:0;text-decoration:underline;margin-top:4px;font-family:'Space Grotesk',sans-serif}
+.org-unconfigured-list{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.org-unconfigured-chip{background:rgba(255,255,255,.05);border:1px solid var(--card-border);border-radius:8px;padding:4px 10px;font-size:.76rem;color:var(--g500)}
+.org-action-row{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.org-compare-btn{flex:1;min-width:200px;padding:12px 20px;background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;border:none;border-radius:8px;font-size:.92rem;font-weight:800;cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:.2s;box-shadow:0 0 20px rgba(37,71,244,.25)}
+.org-compare-btn:hover{box-shadow:0 0 28px rgba(37,71,244,.4)}
+.org-compare-btn:disabled{opacity:.35;cursor:default;box-shadow:none}
+.org-download-btn{padding:12px 18px;background:var(--card-alt);color:var(--g700);border:1px solid var(--card-border);border-radius:8px;font-size:.86rem;font-weight:700;cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:.15s}
+.org-download-btn:hover{border-color:rgba(37,71,244,.4);color:var(--cyan)}
+.cmp-progress{font-size:.78rem;color:var(--g500);display:flex;align-items:center;gap:6px}
+.cmp-scanning{color:var(--cyan);font-weight:700}
+.action-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.action-btn{padding:9px 14px;background:var(--card-alt);border:1px solid var(--card-border);border-radius:8px;font-size:.82rem;font-weight:700;color:var(--g700);cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:.15s}
+.action-btn:hover{border-color:rgba(37,71,244,.4);color:var(--cyan);background:rgba(37,71,244,.08)}
+.action-btn.primary{background:linear-gradient(135deg,var(--blue-d),var(--blue));color:#fff;border-color:transparent;box-shadow:0 0 16px rgba(37,71,244,.3)}
+.action-btn.primary:hover{box-shadow:0 0 24px rgba(37,71,244,.5);color:#fff}
+.workspace-meta{margin-top:10px;font-size:.78rem;color:var(--g500)}
+.library-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+@media(max-width:760px){.library-grid{grid-template-columns:1fr}}
+.library-group{background:var(--card-alt);border:1px solid var(--card-border);border-radius:10px;padding:14px}
+.library-group h4{font-size:.82rem;font-weight:800;color:var(--g500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+.library-list{display:flex;flex-direction:column;gap:10px}
+.library-empty{font-size:.8rem;color:var(--g400)}
+.library-item{background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:11px 13px}
+.library-file{font-family:monospace;font-size:.82rem;font-weight:700;color:var(--cyan)}
+.library-meta{font-size:.74rem;color:var(--g500);margin-top:3px}
+.library-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.library-actions button{background:var(--card-alt);border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;font-size:.74rem;font-weight:700;cursor:pointer;color:var(--g700);font-family:'Space Grotesk',sans-serif;transition:.15s}
+.library-actions button:hover{border-color:rgba(37,71,244,.4);color:var(--cyan)}
+.library-repo-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.library-repo-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--card-alt);border-radius:8px;border:1px solid var(--card-border)}
+.library-repo-row .repo-name{font-family:monospace;font-weight:700;font-size:.82rem;color:var(--cyan)}
+.library-repo-row .repo-meta{font-size:.72rem;color:var(--g500)}
+.library-repo-actions{display:flex;gap:8px;flex-wrap:wrap}
+.library-repo-actions button{background:var(--card);border:1px solid var(--card-border);border-radius:6px;padding:5px 10px;font-size:.72rem;font-weight:700;cursor:pointer;color:var(--g700);font-family:'Space Grotesk',sans-serif;transition:.15s}
+.library-repo-actions button:hover{border-color:rgba(37,71,244,.4);color:var(--cyan)}
+.compare-repo-chip.unresolved{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08)}
+.compare-repo-chip .crep-meta{font-size:.72rem;color:var(--g500);margin-top:2px}
+.compare-repo-chip .crep-name-wrap{display:flex;flex-direction:column;gap:2px}
+.warning-text{background:rgba(245,158,11,.1);border-left:3px solid var(--orange);border-radius:8px;padding:10px 14px;font-size:.8rem;color:#fcd34d;margin-top:12px;display:flex;align-items:flex-start;gap:8px}
+.cmp-saved-panel{margin-top:22px}
+.cmp-saved-panel h4{font-size:.82rem;font-weight:800;color:var(--g500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+.cmp-saved-list{display:flex;flex-direction:column;gap:10px}
+.hidden-input{display:none}
+/* COPY & TRANSLATE */
+.icon-btn{background:none;border:1px solid transparent;border-radius:6px;padding:3px 7px;cursor:pointer;font-size:.8rem;color:var(--g500);transition:.15s;line-height:1;font-family:'Space Grotesk',sans-serif}
+.icon-btn:hover{border-color:var(--card-border);background:var(--card-alt);color:var(--g900)}
+.icon-btn.copied{color:var(--green)!important}
+.translate-panel{border-bottom:1px solid var(--card-border);padding:10px 18px;background:rgba(37,71,244,.05);display:none}
+.translate-panel.open{display:block}
+.translate-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.translate-controls select{padding:4px 10px;border:1px solid var(--card-border);border-radius:6px;background:var(--card-alt);color:var(--g900);font-size:.8rem;font-family:'Space Grotesk',sans-serif;cursor:pointer;outline:none}
+.translate-controls .t-run-btn{padding:4px 14px;border-radius:6px;border:none;background:var(--blue);color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:.15s}
+.translate-controls .t-run-btn:hover{opacity:.85}.translate-controls .t-run-btn:disabled{opacity:.5;cursor:not-allowed}
+.translate-controls .t-close-btn{background:none;border:1px solid var(--card-border);border-radius:6px;padding:3px 8px;font-size:.8rem;color:var(--g500);cursor:pointer;transition:.15s}
+.translate-controls .t-close-btn:hover{color:var(--g900);border-color:var(--g500)}
+.translate-result{margin-top:10px;padding:10px 14px;background:var(--card);border:1px solid var(--card-border);border-radius:8px;font-size:.84rem;color:var(--g700);line-height:1.7;white-space:pre-wrap;word-break:break-word;display:none}
+.translate-result.show{display:block}
+.translate-status{font-size:.78rem;color:var(--g500);margin-top:6px;font-style:italic;display:none}
+.translate-status.show{display:block}
+/* API KEYS MODAL */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:none;align-items:center;justify-content:center;padding:16px}
+.modal-backdrop.open{display:flex}
+.modal-box{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:28px;width:min(460px,100%);box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.modal-box h3{font-size:1rem;font-weight:800;color:var(--g900);margin-bottom:6px}
+.modal-sub{font-size:.8rem;color:var(--g500);margin-bottom:20px;line-height:1.6}
+.modal-field{margin-bottom:14px}
+.modal-field label{display:block;font-size:.74rem;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+.modal-field input{width:100%;padding:9px 12px;border:1px solid var(--card-border);border-radius:8px;font-size:.84rem;background:var(--card-alt);color:var(--g900);font-family:monospace;outline:none;transition:.2s;box-sizing:border-box}
+.modal-field input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,71,244,.15)}
+.modal-actions{display:flex;gap:10px;margin-top:22px;justify-content:flex-end}
+.modal-actions button{padding:8px 20px;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:.15s}
+.modal-save-btn{background:var(--blue);color:#fff;border:none}.modal-save-btn:hover{opacity:.85}
+.modal-cancel-btn{background:none;border:1px solid var(--card-border);color:var(--g700)}.modal-cancel-btn:hover{border-color:rgba(37,71,244,.4);color:var(--cyan)}
+.settings-btn{background:var(--toggle-bg);border:1px solid var(--hero-border);border-radius:8px;padding:6px 10px;font-size:.82rem;cursor:pointer;color:rgba(255,255,255,.65);transition:.15s;line-height:1}
+.settings-btn:hover{border-color:rgba(255,255,255,.35);color:#fff}
+@media(max-width:980px){
+  .hero-inner{grid-template-columns:auto auto;justify-content:space-between}
+  .area-nav{grid-column:1/-1;order:3}
+  .hero-controls{justify-self:auto}
+}
+@media(max-width:640px){
+  .hero{padding:12px 14px}
+  .hero-inner{gap:12px}
+  .brand-name{font-size:.92rem}
+  .hero-controls{width:100%;justify-content:flex-end;flex-wrap:wrap}
+  .lang-toggle{order:3}
+}
+/* FULLSCREEN MODAL */
+.fullscreen-modal{position:fixed;inset:0;z-index:900;background:var(--bg);display:none;flex-direction:column;animation:fs-in .15s ease}
+.fullscreen-modal.open{display:flex}
+@keyframes fs-in{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+.fs-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;background:var(--card);border-bottom:1px solid var(--card-border);flex-shrink:0}
+.fs-title{display:flex;align-items:center;gap:8px;font-family:monospace;font-weight:700;font-size:.9rem;color:var(--cyan);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fs-title-icon{font-size:1.1rem;flex-shrink:0}
+.fs-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.fs-tabs{display:flex;background:var(--card-alt);border:1px solid var(--card-border);border-radius:8px;overflow:hidden}
+.fs-tab-btn{padding:5px 14px;border:none;background:none;cursor:pointer;font-size:.8rem;font-weight:600;color:var(--g500);transition:.15s;font-family:'Space Grotesk',sans-serif}
+.fs-tab-btn.active{background:var(--blue);color:#fff}
+.fs-body{flex:1;overflow-y:auto;padding:32px 40px}
+.fs-body .md-body{max-width:780px;margin:0 auto}
+.fs-body .raw-code{max-height:none;border-radius:10px}
+@media(max-width:640px){.fs-body{padding:20px 16px}}
+</style>
+</head>
+<body>
+
+<!-- FULLSCREEN MODAL -->
+<div class="fullscreen-modal" id="fullscreen-modal">
+  <div class="fs-header">
+    <div class="fs-title"><span class="fs-title-icon" id="fs-icon"></span><span id="fs-path"></span></div>
+    <div class="fs-actions">
+      <div class="fs-tabs">
+        <button class="fs-tab-btn active" id="fs-tab-rendered" onclick="switchFsTab('rendered')"></button>
+        <button class="fs-tab-btn" id="fs-tab-raw" onclick="switchFsTab('raw')"></button>
+      </div>
+      <button class="icon-btn" id="fs-copy-btn" onclick="copyFsContent()">📋</button>
+      <button class="icon-btn" id="fs-close-btn" onclick="closeFullscreen()" style="font-size:.9rem;padding:4px 9px">✕</button>
+    </div>
+  </div>
+  <div class="fs-body">
+    <div id="fs-rendered"></div>
+    <div id="fs-raw" style="display:none"></div>
+  </div>
+</div>
+
+<!-- API KEYS MODAL -->
+<div class="modal-backdrop" id="api-keys-modal" onclick="if(event.target===this)closeApiKeysModal()">
+  <div class="modal-box">
+    <h3 id="ak-title"></h3>
+    <p class="modal-sub" id="ak-desc"></p>
+    <div class="modal-field"><label id="ak-lbl-anthropic">Anthropic (Claude)</label><input id="ak-anthropic" type="password" placeholder="sk-ant-..." autocomplete="off" /></div>
+    <div class="modal-field"><label id="ak-lbl-openai">OpenAI (GPT)</label><input id="ak-openai" type="password" placeholder="sk-..." autocomplete="off" /></div>
+    <div class="modal-field"><label id="ak-lbl-gemini">Google Gemini</label><input id="ak-gemini" type="password" placeholder="AIza..." autocomplete="off" /></div>
+    <div class="modal-actions">
+      <button class="modal-cancel-btn" id="ak-cancel-btn" onclick="closeApiKeysModal()"></button>
+      <button class="modal-save-btn" id="ak-save-btn" onclick="saveApiKeys()"></button>
+    </div>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="brand-lockup">
+      <div class="brand-mark"></div>
+      <div class="brand-name">AgentLens</div>
+    </div>
+    <div class="area-nav">
+      <button class="area-tab active" onclick="setArea('analyze')" id="area-tab-analyze"></button>
+      <button class="area-tab" onclick="setArea('compare')" id="area-tab-compare"></button>
+      <button class="area-tab" onclick="setArea('org')" id="area-tab-org"></button>
+      <button class="area-tab" onclick="setArea('reports')" id="area-tab-reports"></button>
+    </div>
+    <div class="hero-controls">
+      <button class="settings-btn" onclick="showApiKeysModal()" title="API Keys">🔑</button>
+      <div class="lang-toggle">
+        <button class="lang-btn" onclick="setLang('en')">EN</button>
+        <button class="lang-btn active" onclick="setLang('pt')">PT</button>
+      </div>
+      <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+    </div>
+  </div>
+  <p id="hero-sub" class="hero-sub"></p>
+</div>
+
+<div class="container" style="padding-top:18px;padding-bottom:24px">
+  <!-- LOCAL MODE BANNER (shown when opened from CLI) -->
+  <div id="local-banner" class="local-banner hidden" style="margin-top:20px"></div>
+
+  <!-- ANALYZE AREA -->
+  <div id="area-analyze">
+  <div class="input-section">
+    <label class="input-label" for="repo-url" id="lbl-repo"></label>
+    <div class="input-row">
+      <input class="repo-input" id="repo-url" type="text" autocomplete="off" spellcheck="false" />
+      <button class="fetch-btn" id="fetch-btn" onclick="analyze()">
+        <span id="btn-icon">🔍</span>
+        <span id="btn-text"></span>
+      </button>
+    </div>
+    <div class="examples">
+      <span>Try:</span>
+      <span class="example-chip" onclick="setExample('https://github.com/anthropics/anthropic-cookbook')">anthropic-cookbook</span>
+      <span class="example-chip" onclick="setExample('https://github.com/openai/codex')">openai/codex</span>
+      <span class="example-chip" onclick="setExample('https://github.com/microsoft/vscode')">microsoft/vscode</span>
+      <span class="example-chip" onclick="setExample('https://github.com/withastro/astro')">withastro/astro</span>
+      <span class="example-chip" onclick="setExample('https://github.com/getsentry/sentry')">getsentry/sentry</span>
+      <span class="example-chip" onclick="setExample('https://github.com/facebook/react')">facebook/react</span>
+      <span class="example-chip" onclick="setExample('https://github.com/grafana/grafana')">grafana/grafana</span>
+    </div>
+  </div>
+
+  <div id="status-area"></div>
+
+  <div id="results" class="hidden">
+    <div class="result-overview">
+      <div id="result-header" class="hidden"></div>
+      <div id="coverage-matrix" class="coverage-matrix hidden"></div>
+    </div>
+    <!-- MAIN TABS -->
+    <div class="main-tabs">
+      <button class="main-tab active" onclick="showPanel('panel-detect',this)" id="tab-detect"></button>
+      <button class="main-tab" onclick="showPanel('panel-cost',this)" id="tab-cost"></button>
+    </div>
+
+    <!-- DETECTION PANEL -->
+    <div class="tab-panel active" id="panel-detect">
+      <div class="stats-bar" id="stats-bar"></div>
+      <div id="savings-banner" class="savings-banner hidden"></div>
+      <!-- CONTEXT HEALTH -->
+      <div class="section" id="health-section"></div>
+
+      <div class="section">
+        <div class="section-header"><h2 id="h-tools"></h2><span class="pill green" id="tools-found-pill"></span></div>
+        <div class="tool-grid" id="tool-grid"></div>
+      </div>
+      <div class="section">
+        <div class="section-header"><h2 id="h-tree"></h2><span class="pill" id="tree-count-pill"></span></div>
+        <div class="context-tree" id="context-tree"></div>
+      </div>
+      <div class="section">
+        <div class="section-header"><h2 id="h-files"></h2><span class="pill" id="agent-files-pill"></span></div>
+        <div id="agent-files-list"></div>
+      </div>
+      <div class="section">
+        <div class="section-header"><h2 id="h-refs"></h2><span class="pill green" id="refs-count-pill"></span></div>
+        <div class="refs-grid" id="refs-grid"></div>
+      </div>
+    </div>
+
+    <!-- COST PANEL -->
+    <div class="tab-panel" id="panel-cost">
+
+      <!-- Scenario Cards -->
+      <div class="scenario-cards" id="scenario-cards" style="margin-bottom:18px">
+        <div class="scenario-card" id="sc-solo" onclick="applyScenario(1,10,this)">
+          <div class="scenario-name" id="sc-solo-name"></div>
+          <div class="scenario-desc" id="sc-solo-desc"></div>
+          <div class="scenario-cost" id="sc-solo-cost">—</div>
+          <div class="scenario-cost-label" id="sc-solo-lbl"></div>
+        </div>
+        <div class="scenario-card active" id="sc-team" onclick="applyScenario(5,15,this)">
+          <div class="scenario-name" id="sc-team-name"></div>
+          <div class="scenario-desc" id="sc-team-desc"></div>
+          <div class="scenario-cost" id="sc-team-cost">—</div>
+          <div class="scenario-cost-label" id="sc-team-lbl"></div>
+        </div>
+        <div class="scenario-card" id="sc-large" onclick="applyScenario(20,30,this)">
+          <div class="scenario-name" id="sc-large-name"></div>
+          <div class="scenario-desc" id="sc-large-desc"></div>
+          <div class="scenario-cost" id="sc-large-cost">—</div>
+          <div class="scenario-cost-label" id="sc-large-lbl"></div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="cost-section">
+        <h3 id="h-cost-controls"></h3>
+        <div class="controls-grid">
+          <div class="control-group">
+            <label id="lbl-model"></label>
+            <select id="sel-model" onchange="recalcCost()">
+              <optgroup label="Anthropic">
+                <option value="claude-opus-4.6">Claude Opus 4.6</option>
+                <option value="claude-sonnet-4.6" selected>Claude Sonnet 4.6</option>
+                <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
+                <option value="claude-haiku-4.5">Claude Haiku 4.5</option>
+              </optgroup>
+              <optgroup label="OpenAI">
+                <option value="gpt-5.4">GPT-5.4</option>
+                <option value="gpt-5.3-codex">GPT-5.3 Codex</option>
+              </optgroup>
+              <optgroup label="Cursor">
+                <option value="cursor-composer-2">Composer 2</option>
+                <option value="cursor-composer-2-fast">Composer 2 Fast</option>
+                <option value="cursor-composer-1.5">Composer 1.5</option>
+                <option value="cursor-auto">Cursor Auto</option>
+              </optgroup>
+              <optgroup label="Google">
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              </optgroup>
+              <optgroup label="DeepSeek">
+                <option value="deepseek-v3">DeepSeek V3</option>
+                <option value="deepseek-r1">DeepSeek R1</option>
+              </optgroup>
+              <optgroup label="Moonshot">
+                <option value="kimi-k2">Kimi K2</option>
+              </optgroup>
+              <optgroup label="Alibaba">
+                <option value="qwen3-max">Qwen3 Max</option>
+                <option value="qwen3.5-plus">Qwen3.5 Plus</option>
+              </optgroup>
+              <optgroup label="xAI">
+                <option value="grok-3">Grok 3</option>
+              </optgroup>
+              <optgroup label="Mistral">
+                <option value="mistral-large">Mistral Large</option>
+                <option value="mistral-medium-3">Mistral Medium 3</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="control-group">
+            <label id="lbl-output"></label>
+            <select id="sel-output" onchange="recalcCost()">
+              <option value="2000">2k tokens (~short answer)</option>
+              <option value="4000" selected>4k tokens (~medium)</option>
+              <option value="8000">8k tokens (~code gen)</option>
+              <option value="16000">16k tokens (~long gen)</option>
+            </select>
+          </div>
+        </div>
+        <div class="slider-group">
+          <label id="lbl-devs"><span class="val" id="val-devs">5</span></label>
+          <input type="range" id="sl-devs" min="1" max="100" value="5" oninput="recalcCost()">
+        </div>
+        <div class="slider-group">
+          <label id="lbl-chats"><span class="val" id="val-chats">15</span></label>
+          <input type="range" id="sl-chats" min="1" max="100" value="15" oninput="recalcCost()">
+        </div>
+        <div class="slider-group">
+          <label id="lbl-cache"><span class="val" id="val-cache">70%</span></label>
+          <input type="range" id="sl-cache" min="0" max="100" value="70" oninput="recalcCost()">
+        </div>
+        <div class="toggle-row">
+          <label class="toggle"><input type="checkbox" id="chk-brl" onchange="recalcCost()" checked><span class="slider"></span></label>
+          <label for="chk-brl" id="lbl-brl"></label>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-row" id="kpi-row"></div>
+
+      <!-- Charts -->
+      <div class="cost-section">
+        <h3 id="h-breakdown"></h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="chart-box" style="height:260px"><canvas id="chart-breakdown"></canvas></div>
+          <div class="chart-box" style="height:260px"><canvas id="chart-perdev"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Comparison Table -->
+      <div class="cost-section">
+        <h3 id="h-comparison"></h3>
+        <div style="overflow-x:auto">
+          <table class="comparison-table" id="comparison-table"></table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="empty-state" class="empty-state">
+    <div class="icon">🗂️</div>
+    <h3 id="empty-h"></h3>
+    <p id="empty-p"></p>
+  </div>
+  </div><!-- end #area-analyze -->
+
+  <!-- COMPARE AREA -->
+  <div id="area-compare" class="hidden">
+    <div class="compare-card" style="margin-top:20px">
+      <div class="examples" style="margin-bottom:14px">
+        <span>Try:</span>
+        <span class="example-chip" onclick="addExampleToCompare('https://github.com/anthropics/anthropic-cookbook')">anthropic-cookbook</span>
+        <span class="example-chip" onclick="addExampleToCompare('https://github.com/openai/codex')">openai/codex</span>
+        <span class="example-chip" onclick="addExampleToCompare('https://github.com/microsoft/vscode')">microsoft/vscode</span>
+        <span class="example-chip" onclick="addExampleToCompare('https://github.com/withastro/astro')">withastro/astro</span>
+        <span class="example-chip" onclick="addExampleToCompare('https://github.com/getsentry/sentry')">getsentry/sentry</span>
+        <span class="example-chip" onclick="addExampleToCompare('https://github.com/facebook/react')">facebook/react</span>
+        <span class="example-chip" onclick="addExampleToCompare('https://github.com/grafana/grafana')">grafana/grafana</span>
+      </div>
+      <label class="input-label" id="lbl-cmp-add"></label>
+      <div class="input-row">
+        <input class="repo-input" id="cmp-url" type="text" autocomplete="off" spellcheck="false" />
+        <button class="fetch-btn" onclick="addToCompare()">
+          <span>＋</span>
+          <span id="btn-cmp-add"></span>
+        </button>
+      </div>
+      <div class="compare-queue" id="cmp-queue"></div>
+      <p class="cmp-hint" id="cmp-hint"></p>
+      <div class="action-row">
+        <button class="action-btn" id="btn-import-report-compare" onclick="triggerReportImport()"></button>
+        <button class="action-btn" id="btn-import-comparison-compare" onclick="triggerComparisonImport()"></button>
+        <button class="action-btn" id="btn-export-comparison-compare" onclick="exportComparison()"></button>
+      </div>
+      <button class="compare-run-btn" id="cmp-run-btn" onclick="runCompare()" disabled>
+        <span id="cmp-run-icon">⚖️</span>
+        <span id="cmp-run-text"></span>
+      </button>
+    </div>
+
+    <!-- Compare status -->
+    <div id="cmp-status-area"></div>
+
+    <!-- Compare results -->
+    <div id="cmp-results" class="hidden">
+      <!-- Scatter plot -->
+      <div class="cost-section scatter-section" id="scatter-section" style="display:none">
+        <h3 id="h-scatter-chart"></h3>
+        <div class="chart-box" style="height:260px"><canvas id="chart-compare-scatter"></canvas></div>
+      </div>
+      <!-- Context bar chart -->
+      <div class="cost-section">
+        <h3 id="h-cmp-chart"></h3>
+        <div class="chart-box" style="height:300px"><canvas id="chart-compare"></canvas></div>
+      </div>
+      <!-- Comparison table -->
+      <div class="cost-section">
+        <h3 id="h-cmp-table"></h3>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:var(--card-alt);border:1px solid var(--card-border);border-radius:10px">
+          <label style="font-size:.75rem;font-weight:700;color:var(--g500);text-transform:uppercase" id="lbl-cmp-model"></label>
+          <select id="cmp-sel-model" onchange="renderCompareResults()" style="padding:6px 10px;border:1px solid var(--card-border);border-radius:8px;font-size:.88rem;background:var(--card-alt);color:var(--g900);font-family:'Space Grotesk',sans-serif;outline:none">
+            <optgroup label="Anthropic">
+              <option value="claude-opus-4.6">Claude Opus 4.6</option>
+              <option value="claude-sonnet-4.6" selected>Claude Sonnet 4.6</option>
+              <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
+              <option value="claude-haiku-4.5">Claude Haiku 4.5</option>
+            </optgroup>
+            <optgroup label="OpenAI">
+              <option value="gpt-5.4">GPT-5.4</option>
+              <option value="gpt-5.3-codex">GPT-5.3 Codex</option>
+            </optgroup>
+            <optgroup label="Cursor">
+              <option value="cursor-composer-2">Composer 2</option>
+              <option value="cursor-composer-2-fast">Composer 2 Fast</option>
+              <option value="cursor-auto">Cursor Auto</option>
+            </optgroup>
+            <optgroup label="Google">
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            </optgroup>
+            <optgroup label="DeepSeek">
+              <option value="deepseek-v3">DeepSeek V3</option>
+              <option value="deepseek-r1">DeepSeek R1</option>
+            </optgroup>
+            <optgroup label="Moonshot"><option value="kimi-k2">Kimi K2</option></optgroup>
+            <optgroup label="Alibaba">
+              <option value="qwen3-max">Qwen3 Max</option>
+              <option value="qwen3.5-plus">Qwen3.5 Plus</option>
+            </optgroup>
+            <optgroup label="xAI"><option value="grok-3">Grok 3</option></optgroup>
+            <optgroup label="Mistral">
+              <option value="mistral-large">Mistral Large 3</option>
+              <option value="mistral-medium-3">Mistral Medium 3</option>
+            </optgroup>
+          </select>
+          <label style="font-size:.75rem;font-weight:700;color:var(--g500);text-transform:uppercase" id="lbl-cmp-devs"></label>
+          <input type="range" id="cmp-sl-devs" min="1" max="100" value="5" oninput="renderCompareResults()" style="width:120px;accent-color:var(--blue)">
+          <span id="cmp-val-devs" style="font-size:.9rem;font-weight:700;color:var(--blue);min-width:24px">5</span>
+          <label style="font-size:.75rem;font-weight:700;color:var(--g500);text-transform:uppercase" id="lbl-cmp-chats"></label>
+          <input type="range" id="cmp-sl-chats" min="1" max="100" value="15" oninput="renderCompareResults()" style="width:120px;accent-color:var(--blue)">
+          <span id="cmp-val-chats" style="font-size:.9rem;font-weight:700;color:var(--blue);min-width:24px">15</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="compare-result-table" id="cmp-result-table"></table>
+        </div>
+      </div>
+    </div>
+  </div><!-- end #area-compare -->
+
+  <!-- ORG AREA -->
+  <div id="area-org" class="hidden">
+    <div class="org-area-card">
+      <label class="input-label" id="lbl-org-area"></label>
+      <div class="input-row">
+        <input class="repo-input" id="org-area-url" type="text" autocomplete="off" spellcheck="false" />
+        <button class="fetch-btn" onclick="addOrgFromArea()">
+          <span>🏢</span>
+          <span id="btn-org-scan"></span>
+        </button>
+      </div>
+    </div>
+    <div id="org-scan-panel" class="hidden"></div>
+  </div><!-- end #area-org -->
+
+  <!-- REPORTS AREA -->
+  <div id="area-reports" class="hidden">
+    <div id="local-workspace" class="compare-card" style="margin-top:20px">
+      <label class="input-label" id="lbl-local-workspace"></label>
+      <div class="action-row">
+        <button class="action-btn primary" id="btn-open-folder" onclick="openReportFolder()"></button>
+        <button class="action-btn" id="btn-import-report" onclick="triggerReportImport()"></button>
+      </div>
+      <div class="workspace-meta" id="local-workspace-meta"></div>
+      <div class="warning-text hidden" id="local-workspace-warning"></div>
+      <div style="margin-top:18px">
+        <div class="library-group">
+          <h4 id="lbl-library-reports"></h4>
+          <div class="library-list" id="local-reports-list"></div>
+        </div>
+      </div>
+    </div>
+    <div id="snapshots-timeline" class="hidden" style="margin-top:20px"></div>
+    <div class="compare-card cmp-saved-panel" style="margin-top:20px">
+      <h4 id="lbl-saved-comparisons"></h4>
+      <div class="cmp-saved-list" id="cmp-saved-list"></div>
+    </div>
+    <input class="hidden-input" id="folder-input" type="file" webkitdirectory directory multiple onchange="handleFolderSelection(event)">
+    <input class="hidden-input" id="report-input" type="file" accept="application/json,.json" multiple onchange="handleReportImport(event)">
+    <input class="hidden-input" id="comparison-input" type="file" accept="application/json,.json" onchange="handleComparisonImport(event)">
+  </div><!-- end #area-reports -->
+
+</div>
+
+<footer>
+  <span id="footer-text"></span>
+  <span style="margin:0 10px;opacity:.4">·</span>
+  <a href="https://github.com/hugohvf/agentlens" target="_blank" rel="noopener" style="color:var(--cyan);font-weight:600;text-decoration:none;opacity:.6;transition:.15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">⭐ GitHub</a>
+</footer>
+
+<script>
+// ══════════════════════════════════════
+// I18N
+// ══════════════════════════════════════
+const I18N = {
+  en: {
+    heroSub: 'Paste any GitHub repo to detect AI agent configs, resolve every referenced file, and calculate the real cost of context loaded per request.',
+    lblRepo: 'GitHub Repository URL',
+    btnAnalyze: 'Analyze',
+    tabDetect: '🔍 Agent Detection',
+    tabCost: '💰 Cost Analysis',
+    hTools: '🛠️ Agent Tools Detected',
+    hTree: '📂 Unified Context Load Order',
+    hFiles: '📄 Agent Config Files',
+    hRefs: '🔗 Referenced Files',
+    hCostControls: '⚙️ Configuration',
+    hBreakdown: '📊 Cost Breakdown',
+    hComparison: '📋 Model Comparison — click to sort',
+    hHealth: '🩺 Context Health',
+    healthLean: 'Lean',
+    healthModerate: 'Moderate',
+    healthHeavy: 'Heavy',
+    healthBloated: 'Bloated',
+    healthIdeal: 'Ideal',
+    healthYours: 'This repo',
+    healthBaseline: 'Recommended baseline',
+    healthCodexWarn: 'Codex truncates at 32 KiB (~6k tokens) silently',
+    healthCopilotWarn: 'Copilot deprioritizes instructions above ~3k tokens',
+    healthClaudeWarn: 'Anthropic recommends keeping CLAUDE.md "short and human-readable"',
+    healthPerFile: 'Per-file health',
+    healthTotal: 'Total context health',
+    lblModel: 'Model / Provider',
+    lblOutput: 'Avg. Output per Chat',
+    lblDevs: 'Developers',
+    lblChats: 'Chats per Dev / Day',
+    lblCache: 'Cache Hit Rate',
+    lblBrl: 'Show BRL (R$)',
+    kpiReq: '/request',
+    kpiDay: '/day',
+    kpiMonth: '/month',
+    kpiYear: '/year',
+    kpiContext: 'context/req',
+    projLabel: 'Cumulative',
+    brkInput: 'Input',
+    brkOutput: 'Output',
+    brkCache: 'Cache',
+    perDevTitle: 'Monthly Cost by Team Size',
+    thModel: 'Model',
+    thReq: '$/request',
+    thDay: '$/day',
+    thMonth: '$/month',
+    thYear: '$/year',
+    emptyH: 'No repository analyzed yet',
+    emptyP: 'Enter a GitHub URL and click Analyze to scan for all AI agent config files and calculate context costs.',
+    footer: 'AgentLens · Scans AGENTS.md · CLAUDE.md · .cursorrules · .windsurfrules · copilot-instructions.md',
+    found: 'found',
+    missing: 'not found',
+    shared: 'shared',
+    already: 'already counted',
+    tokens: 'tokens',
+    noRefs: 'No file references detected',
+    noRefsP: 'The agent config files don\'t reference any local files via links, @imports, or known patterns.',
+    dedupTitle: 'Agent view model',
+    dedupDetail: (n,raw,dedup) => `${n} agent view(s). Largest active view: ~${dedup}. All discovered files: ~${raw}.`,
+    scanning: 'Scanning agent config files on branch',
+    parsing: 'Parsing references',
+    fetching: 'Fetching referenced files',
+    noFiles: 'No AI agent config files found in this repository.',
+    errPrivate: 'Repository not accessible. It may be private, or the URL may be wrong.',
+    errPrivateDetail: 'GitHub raw content API returned 404 for all branches. Verify the repo exists and is public.',
+    errNetwork: 'Network error — unable to reach GitHub. Check your connection and try again.',
+    rendered: '✨ Rendered',
+    raw: '📝 Raw',
+    tools: 'tools',
+    refs: 'refs',
+    resolved: 'resolved',
+    files: 'files',
+    placeholder: 'https://github.com/owner/repository',
+    tabAnalyze: '🔍 Analyze Repo',
+    tabCompare: '⚖️ Compare Repos',
+    cmpAddLabel: 'Add Repository to Compare',
+    cmpAddBtn: 'Add',
+    cmpRun: 'Compare All',
+    cmpHint: 'Add 2–20 repositories, then click Compare All',
+    cmpChartTitle: '📊 Context Size Comparison',
+    cmpTableTitle: '📋 Side-by-Side Cost Comparison',
+    cmpModel: 'Model',
+    cmpDevs: 'Devs',
+    cmpChats: 'Chats/day',
+    cmpColRepo: 'Repository',
+    cmpColTools: 'Tools',
+    cmpColTokens: 'Tokens',
+    cmpColAction: 'Action',
+    cmpOpenAnalysis: 'Open Analysis',
+    cmpNoConfigs: 'no agent configs',
+    cmpScanning: 'Scanning',
+    localWorkspace: 'Local Reports',
+    openFolder: 'Open Report Folder',
+    importReport: 'Import Report JSON',
+    importComparison: 'Import Comparison JSON',
+    exportComparison: 'Export Comparison',
+    libraryReports: 'Report JSON Files',
+    libraryComparisons: 'Saved Comparisons',
+    savedComparisons: 'Saved Comparisons',
+    workspaceIdle: 'Open a folder or import report JSON files to work with local outputs.',
+    workspaceLoaded: 'Local workspace ready',
+    workspaceFetchWarn: 'This viewer could not auto-load its sibling report JSON. Open the folder or import the report JSON manually.',
+    workspaceNoReports: 'No report JSON files loaded yet.',
+    workspaceNoComparisons: 'No comparison JSON files loaded yet.',
+    reportOpen: 'Open',
+    reportCompare: 'Add to Compare',
+    comparisonLoad: 'Load',
+    comparisonLoaded: 'Comparison loaded into queue.',
+    comparisonExported: 'Comparison exported.',
+    invalidReportJson: 'Invalid report JSON.',
+    invalidComparisonJson: 'Invalid comparison JSON.',
+    compareNeedTwo: 'Add at least 2 items to compare.',
+    compareMax: 'Maximum 20 items in compare.',
+    compareMissingFile: 'Missing report JSON file',
+    compareLocalLabel: 'Local report',
+    compareGithubLabel: 'GitHub repo',
+    localCurrent: 'Current report',
+    localImported: 'Imported',
+    localFolder: 'Folder',
+    localUnresolved: 'Unresolved',
+    orgScanLabel: 'Add Repository or Scan Organization/User',
+    orgPlaceholder: 'https://github.com/owner/repository or user/organization',
+    orgFetching: 'Fetching repositories from',
+    orgScanning: 'Scanning repositories',
+    orgOf: 'of',
+    orgConfiguredTitle: 'With agent config',
+    orgUnconfiguredTitle: 'Without agent config (not compared)',
+    orgSelectAll: 'Select all',
+    orgDeselectAll: 'Deselect all',
+    orgSortTokens: 'Tokens',
+    orgSortStars: 'Stars',
+    orgSortDate: 'Date',
+    orgSortName: 'Name',
+    orgAddSelected: 'Compare Selected',
+    orgDownloadReport: 'Download Org Report',
+    orgNotFound: 'GitHub organization or user not found.',
+    orgRateLimit: 'GitHub rate limit reached. Wait a few minutes and try again.',
+    orgNetworkError: 'Network error fetching GitHub repositories.',
+    orgColRepo: 'Repository',
+    orgColTools: 'Tools',
+    orgColTokens: 'Tokens',
+    orgColStars: 'Stars',
+    orgColDate: 'Created',
+    orgUnconfiguredToggleShow: 'Show unconfigured repos',
+    orgUnconfiguredToggleHide: 'Hide unconfigured repos',
+    orgShowingPage: 'Page',
+    orgPrev: 'Prev',
+    orgNext: 'Next',
+    orgPublicScanned: 'public repositories scanned',
+    orgNoConfigured: 'No repositories with agent configuration found.',
+    orgSortLabel: 'Sort:',
+    compareMax: 'Maximum 20 items in compare.',
+    invalidGithubUrl: '❌ Invalid GitHub URL, repository, user, or organization.',
+    cmpHint: 'Add 2–20 repositories, then click Compare All',
+    configTokens: 'config tokens',
+    totalContext: 'total context',
+    dedupSaved: 'not simultaneous',
+    fsExpand: 'Full screen',
+    fsCopy: 'Copy',
+    fsClose: 'Close (Esc)',
+    translating: 'Translating…',
+    noApiKey: 'No API key configured — click 🔑 in the header to add one',
+    errEnterUrl: 'Enter a GitHub URL.',
+    errInvalidUrl: 'Invalid URL. Use: https://github.com/owner/repo',
+    cmpErrPrivate: 'Private repo',
+    cmpErrNetwork: 'Network error',
+    cmpErrNotFound: 'Not found',
+    apiKeysTitle: '🔑 API Keys for Translation',
+    apiKeysDesc: "Keys are stored only in your browser's localStorage and are sent directly to the respective API. Leave blank to remove a key.",
+    apiKeysCancelBtn: 'Cancel',
+    apiKeysSaveBtn: 'Save Keys',
+    translateBtn: 'Translate',
+    areaAnalyze: '🔍 Analyze',
+    areaCompare: '⚖️ Compare',
+    areaOrg: '🏢 Organization',
+    areaReports: '📁 Reports',
+    coverageMatrixTitle: 'Agent Coverage',
+    scenarioSoloName: 'Solo Dev',
+    scenarioSoloDesc: '1 dev · 10 chats/day',
+    scenarioTeamName: 'Small Team',
+    scenarioTeamDesc: '5 devs · 15 chats/day',
+    scenarioLargeName: 'Large Team',
+    scenarioLargeDesc: '20 devs · 30 chats/day',
+    scenarioCostLabel: '/month',
+    scatterPlotTitle: '📈 Tokens × Monthly Cost',
+    historicalSnapshots: '🕑 Historical Snapshots',
+    orgAreaLabel: 'GitHub Organization or User URL',
+    orgAreaBtn: 'Scan',
+    heavyRefBadge: 'heavy',
+    heavyRefIntro: (tok, pct) => `⚠ This file alone contributes ~${tok} tokens — ${pct}× the recommended budget for an entire agent config. It is loaded in full on every request.`,
+    heavyFixRemoveTitle: 'Remove the reference',
+    heavyFixRemoveDesc: 'Delete the @import, markdown link, or backtick path that points to this file. You can still describe what the file does in plain text — the agent only loads it if there is a parseable path reference.',
+    heavyFixClaudeTitle: '🔮 Claude Code — path-scoped rule',
+    heavyFixClaudeDesc: 'Move the reference into a rule file with a paths: field. The rule only loads when Claude works with files in those paths — zero cost otherwise.',
+    heavyFixClaudeCode: `# .claude/rules/my-context.md\n---\npaths:\n  - "src/components/**"\n---\nInstructions that reference the heavy file`,
+    heavyFixSummaryTitle: 'Replace with a short summary file',
+    heavyFixSummaryDesc: 'Create a focused summary (< 2 k tokens) that captures only what the agent needs to know. Reference that file instead of the full one.',
+  },
+  pt: {
+    heroSub: 'Cole a URL de qualquer repositório GitHub para detectar configs de agentes IA, resolver cada arquivo referenciado e calcular o custo real do contexto carregado por requisição.',
+    lblRepo: 'URL do Repositório GitHub',
+    btnAnalyze: 'Analisar',
+    tabDetect: '🔍 Detecção de Agentes',
+    tabCost: '💰 Análise de Custo',
+    hTools: '🛠️ Ferramentas Detectadas',
+    hTree: '📂 Ordem de Carregamento do Contexto',
+    hFiles: '📄 Arquivos de Configuração',
+    hRefs: '🔗 Arquivos Referenciados',
+    hCostControls: '⚙️ Configuração',
+    hBreakdown: '📊 Composição do Custo',
+    hComparison: '📋 Comparação — clique para ordenar',
+    hHealth: '🩺 Saúde do Contexto',
+    healthLean: 'Enxuto',
+    healthModerate: 'Moderado',
+    healthHeavy: 'Pesado',
+    healthBloated: 'Muito pesado',
+    healthIdeal: 'Ideal',
+    healthYours: 'Este repositório',
+    healthBaseline: 'Baseline recomendado',
+    healthCodexWarn: 'Codex trunca silenciosamente em 32 KiB (~6k tokens)',
+    healthCopilotWarn: 'Copilot deprioritiza instruções acima de ~3k tokens',
+    healthClaudeWarn: 'Anthropic recomenda CLAUDE.md "curto e legível por humanos"',
+    healthPerFile: 'Saúde por arquivo',
+    healthTotal: 'Saúde total do contexto',
+    lblModel: 'Modelo / Provedor',
+    lblOutput: 'Output Médio por Chat',
+    lblDevs: 'Desenvolvedores',
+    lblChats: 'Chats por Dev / Dia',
+    lblCache: 'Taxa de Cache Hit',
+    lblBrl: 'Mostrar BRL (R$)',
+    kpiReq: '/requisição',
+    kpiDay: '/dia',
+    kpiMonth: '/mês',
+    kpiYear: '/ano',
+    kpiContext: 'contexto/req',
+    projLabel: 'Acumulado',
+    brkInput: 'Input',
+    brkOutput: 'Output',
+    brkCache: 'Cache',
+    perDevTitle: 'Custo Mensal por Tamanho do Time',
+    thModel: 'Modelo',
+    thReq: '$/req',
+    thDay: '$/dia',
+    thMonth: '$/mês',
+    thYear: '$/ano',
+    emptyH: 'Nenhum repositório analisado',
+    emptyP: 'Digite a URL de um repositório e clique em Analisar para detectar todos os arquivos de config de agentes e calcular os custos.',
+    footer: 'AgentLens · Escaneia AGENTS.md · CLAUDE.md · .cursorrules · .windsurfrules · copilot-instructions.md',
+    found: 'encontrado',
+    missing: 'não encontrado',
+    shared: 'compartilhado',
+    already: 'já contado',
+    tokens: 'tokens',
+    noRefs: 'Nenhuma referência detectada',
+    noRefsP: 'Os arquivos de config não referenciam nenhum arquivo local via links, @imports ou padrões conhecidos.',
+    dedupTitle: 'Modelo de visão do agente',
+    dedupDetail: (n,raw,dedup) => `${n} visão(ões) de agente. Maior visão ativa: ~${dedup}. Todos os arquivos descobertos: ~${raw}.`,
+    scanning: 'Escaneando configs na branch',
+    parsing: 'Parseando referências',
+    fetching: 'Buscando arquivos referenciados',
+    noFiles: 'Nenhum arquivo de config de agente IA encontrado neste repositório.',
+    errPrivate: 'Repositório não acessível. Pode ser privado ou a URL está incorreta.',
+    errPrivateDetail: 'A API do GitHub retornou 404 para todas as branches. Verifique se o repositório existe e é público.',
+    errNetwork: 'Erro de rede — não foi possível acessar o GitHub. Verifique sua conexão.',
+    rendered: '✨ Renderizado',
+    raw: '📝 Bruto',
+    tools: 'ferramentas',
+    refs: 'refs',
+    resolved: 'resolvidos',
+    files: 'arquivos',
+    placeholder: 'https://github.com/dono/repositorio',
+    tabAnalyze: '🔍 Analisar Repositório',
+    tabCompare: '⚖️ Comparar Repositórios',
+    cmpAddLabel: 'Adicionar Repositório',
+    cmpAddBtn: 'Adicionar',
+    cmpRun: 'Comparar Todos',
+    cmpHint: 'Adicione 2–20 repositórios e clique em Comparar Todos',
+    cmpChartTitle: '📊 Comparativo de Contexto',
+    cmpTableTitle: '📋 Comparação de Custo',
+    cmpModel: 'Modelo',
+    cmpDevs: 'Devs',
+    cmpChats: 'Chats/dia',
+    cmpColRepo: 'Repositório',
+    cmpColTools: 'Ferramentas',
+    cmpColTokens: 'Tokens',
+    cmpColAction: 'Ação',
+    cmpOpenAnalysis: 'Abrir Análise',
+    cmpNoConfigs: 'sem agent configs',
+    cmpScanning: 'Escaneando',
+    localWorkspace: 'Relatórios Locais',
+    openFolder: 'Abrir Pasta de Relatórios',
+    importReport: 'Importar JSON de Relatório',
+    importComparison: 'Importar JSON de Comparação',
+    exportComparison: 'Exportar Comparação',
+    libraryReports: 'Arquivos JSON de Relatório',
+    libraryComparisons: 'Comparações Salvas',
+    savedComparisons: 'Comparações Salvas',
+    workspaceIdle: 'Abra uma pasta ou importe JSONs de relatório para trabalhar com saídas locais.',
+    workspaceLoaded: 'Workspace local pronto',
+    workspaceFetchWarn: 'Este viewer não conseguiu carregar automaticamente o JSON vizinho. Abra a pasta ou importe o JSON do relatório manualmente.',
+    workspaceNoReports: 'Nenhum JSON de relatório carregado ainda.',
+    workspaceNoComparisons: 'Nenhum JSON de comparação carregado ainda.',
+    reportOpen: 'Abrir',
+    reportCompare: 'Adicionar ao Compare',
+    comparisonLoad: 'Carregar',
+    comparisonLoaded: 'Comparação carregada na fila.',
+    comparisonExported: 'Comparação exportada.',
+    invalidReportJson: 'JSON de relatório inválido.',
+    invalidComparisonJson: 'JSON de comparação inválido.',
+    compareNeedTwo: 'Adicione pelo menos 2 itens para comparar.',
+    compareMax: 'Máximo de 20 itens na comparação.',
+    compareMissingFile: 'Arquivo JSON de relatório ausente',
+    compareLocalLabel: 'Relatório local',
+    compareGithubLabel: 'Repositório GitHub',
+    localCurrent: 'Relatório atual',
+    localImported: 'Importado',
+    localFolder: 'Pasta',
+    localUnresolved: 'Não resolvido',
+    orgScanLabel: 'Adicionar Repositório ou Avaliar Organização/Usuário',
+    orgPlaceholder: 'https://github.com/dono/repositório ou usuário/organização',
+    orgFetching: 'Buscando repositórios de',
+    orgScanning: 'Escaneando repositórios',
+    orgOf: 'de',
+    orgConfiguredTitle: 'Com configuração de agente',
+    orgUnconfiguredTitle: 'Sem configuração (não comparados)',
+    orgSelectAll: 'Selecionar todos',
+    orgDeselectAll: 'Desmarcar todos',
+    orgSortTokens: 'Tokens',
+    orgSortStars: 'Stars',
+    orgSortDate: 'Data',
+    orgSortName: 'Nome',
+    orgAddSelected: 'Comparar Selecionados',
+    orgDownloadReport: 'Baixar Relatório da Organização',
+    orgNotFound: 'Organização ou usuário não encontrado no GitHub.',
+    orgRateLimit: 'Rate limit do GitHub atingido. Aguarde alguns minutos e tente novamente.',
+    orgNetworkError: 'Erro de rede ao buscar repositórios no GitHub.',
+    orgColRepo: 'Repositório',
+    orgColTools: 'Ferramentas',
+    orgColTokens: 'Tokens',
+    orgColStars: 'Stars',
+    orgColDate: 'Criado em',
+    orgUnconfiguredToggleShow: 'Mostrar repos sem configuração',
+    orgUnconfiguredToggleHide: 'Ocultar repos sem configuração',
+    orgShowingPage: 'Página',
+    orgPrev: 'Anterior',
+    orgNext: 'Próxima',
+    orgPublicScanned: 'repositórios públicos escaneados',
+    orgNoConfigured: 'Nenhum repositório com configuração de agente encontrado.',
+    orgSortLabel: 'Ordenar:',
+    compareMax: 'Máximo de 20 itens na comparação.',
+    invalidGithubUrl: '❌ URL do GitHub, repositório, usuário ou organização inválida.',
+    configTokens: 'tokens de config',
+    totalContext: 'contexto total',
+    dedupSaved: 'não simultâneo',
+    fsExpand: 'Tela cheia',
+    fsCopy: 'Copiar',
+    fsClose: 'Fechar (Esc)',
+    translating: 'Traduzindo…',
+    noApiKey: 'Nenhuma chave configurada — clique em 🔑 no cabeçalho para adicionar',
+    errEnterUrl: 'Digite uma URL do GitHub.',
+    errInvalidUrl: 'URL inválida. Use: https://github.com/owner/repo',
+    cmpErrPrivate: 'Repositório privado',
+    cmpErrNetwork: 'Erro de rede',
+    cmpErrNotFound: 'Não encontrado',
+    apiKeysTitle: '🔑 Chaves de API para Tradução',
+    apiKeysDesc: 'As chaves são armazenadas apenas no localStorage do seu navegador e enviadas diretamente à respectiva API. Deixe em branco para remover.',
+    apiKeysCancelBtn: 'Cancelar',
+    apiKeysSaveBtn: 'Salvar Chaves',
+    translateBtn: 'Traduzir',
+    areaAnalyze: '🔍 Analisar',
+    areaCompare: '⚖️ Comparar',
+    areaOrg: '🏢 Organização',
+    areaReports: '📁 Relatórios',
+    coverageMatrixTitle: 'Cobertura de Agentes',
+    scenarioSoloName: 'Dev Solo',
+    scenarioSoloDesc: '1 dev · 10 chats/dia',
+    scenarioTeamName: 'Time Pequeno',
+    scenarioTeamDesc: '5 devs · 15 chats/dia',
+    scenarioLargeName: 'Time Grande',
+    scenarioLargeDesc: '20 devs · 30 chats/dia',
+    scenarioCostLabel: '/mês',
+    scatterPlotTitle: '📈 Tokens × Custo Mensal',
+    historicalSnapshots: '🕑 Histórico de Snapshots',
+    orgAreaLabel: 'URL de Organização ou Usuário GitHub',
+    orgAreaBtn: 'Escanear',
+    heavyRefBadge: 'pesado',
+    heavyRefIntro: (tok, pct) => `⚠ Este arquivo sozinho contribui com ~${tok} tokens — ${pct}× o orçamento recomendado para um config de agente inteiro. Ele é carregado por completo em cada requisição.`,
+    heavyFixRemoveTitle: 'Remover a referência',
+    heavyFixRemoveDesc: 'Delete o @import, link markdown ou caminho em backtick que aponta para este arquivo. Você ainda pode descrever o que o arquivo faz em texto simples — o agente só carrega se houver uma referência de caminho parseável.',
+    heavyFixClaudeTitle: '🔮 Claude Code — regra com escopo de paths',
+    heavyFixClaudeDesc: 'Mova a referência para um arquivo de regra com campo paths:. A regra só carrega quando Claude trabalha com arquivos nesses caminhos — custo zero caso contrário.',
+    heavyFixClaudeCode: `# .claude/rules/meu-contexto.md\n---\npaths:\n  - "src/components/**"\n---\nInstruções que referenciam o arquivo pesado`,
+    heavyFixSummaryTitle: 'Substituir por um arquivo de resumo curto',
+    heavyFixSummaryDesc: 'Crie um resumo focado (< 2 k tokens) com só o que o agente precisa saber. Referencie esse arquivo ao invés do original.',
+  }
+};
+let LANG = 'pt';
+function T(k) { return I18N[LANG][k] || I18N.en[k] || k; }
+
+function setLang(l) {
+  LANG = l;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.textContent.trim() === l.toUpperCase()));
+  applyI18N();
+  renderLocalWorkspace();
+  renderLocalBanner();
+  renderCmpQueue();
+  if (COMPARE_STATE.results.length) renderCompareResults();
+  if (ORG_SCAN_STATE.done) renderOrgResults();
+  if (STATE.analyzed) recalcCost();
+}
+function applyI18N() {
+  document.getElementById('hero-sub').textContent = T('heroSub');
+  document.getElementById('lbl-repo').textContent = T('lblRepo');
+  document.getElementById('btn-text').textContent = T('btnAnalyze');
+  document.getElementById('repo-url').placeholder = T('placeholder');
+  document.getElementById('tab-detect').textContent = T('tabDetect');
+  document.getElementById('tab-cost').textContent = T('tabCost');
+  document.getElementById('area-tab-analyze').textContent = T('areaAnalyze');
+  document.getElementById('area-tab-compare').textContent = T('areaCompare');
+  document.getElementById('area-tab-org').textContent = T('areaOrg');
+  document.getElementById('area-tab-reports').textContent = T('areaReports');
+  document.getElementById('lbl-local-workspace').textContent = T('localWorkspace');
+  document.getElementById('btn-open-folder').textContent = T('openFolder');
+  document.getElementById('btn-import-report').textContent = T('importReport');
+  document.getElementById('lbl-library-reports').textContent = T('libraryReports');
+  document.getElementById('lbl-saved-comparisons').textContent = T('savedComparisons');
+  document.getElementById('lbl-cmp-add').textContent = T('cmpAddLabel');
+  document.getElementById('btn-cmp-add').textContent = T('cmpAddBtn');
+  document.getElementById('btn-import-report-compare').textContent = T('importReport');
+  document.getElementById('btn-import-comparison-compare').textContent = T('importComparison');
+  document.getElementById('btn-export-comparison-compare').textContent = T('exportComparison');
+  renderSavedComparisons();
+  document.getElementById('cmp-run-text').textContent = T('cmpRun');
+  document.getElementById('cmp-hint').textContent = T('cmpHint');
+  document.getElementById('h-cmp-chart').textContent = T('cmpChartTitle');
+  document.getElementById('h-scatter-chart').textContent = T('scatterPlotTitle');
+  document.getElementById('h-cmp-table').textContent = T('cmpTableTitle');
+  document.getElementById('lbl-cmp-model').textContent = T('cmpModel');
+  document.getElementById('lbl-cmp-devs').textContent = T('cmpDevs');
+  document.getElementById('lbl-cmp-chats').textContent = T('cmpChats');
+  document.getElementById('cmp-url').placeholder = T('orgPlaceholder');
+  document.getElementById('lbl-org-area').textContent = T('orgAreaLabel');
+  document.getElementById('org-area-url').placeholder = T('orgPlaceholder');
+  document.getElementById('btn-org-scan').textContent = T('orgAreaBtn');
+  document.getElementById('h-tools').textContent = T('hTools');
+  document.getElementById('h-tree').textContent = T('hTree');
+  document.getElementById('h-files').textContent = T('hFiles');
+  document.getElementById('h-refs').textContent = T('hRefs');
+  document.getElementById('h-cost-controls').textContent = T('hCostControls');
+  document.getElementById('h-breakdown').textContent = T('hBreakdown');
+  document.getElementById('h-comparison').textContent = T('hComparison');
+  document.getElementById('lbl-model').textContent = T('lblModel');
+  document.getElementById('lbl-output').textContent = T('lblOutput');
+  document.getElementById('lbl-brl').textContent = T('lblBrl');
+  document.getElementById('empty-h').textContent = T('emptyH');
+  document.getElementById('empty-p').textContent = T('emptyP');
+  document.getElementById('footer-text').textContent = T('footer');
+  document.getElementById('fs-tab-rendered').textContent = T('rendered');
+  document.getElementById('fs-tab-raw').textContent = T('raw');
+  document.getElementById('fs-copy-btn').title = T('fsCopy');
+  document.getElementById('fs-close-btn').title = T('fsClose');
+  document.getElementById('ak-title').textContent = T('apiKeysTitle');
+  document.getElementById('ak-desc').textContent = T('apiKeysDesc');
+  document.getElementById('ak-cancel-btn').textContent = T('apiKeysCancelBtn');
+  document.getElementById('ak-save-btn').textContent = T('apiKeysSaveBtn');
+  document.getElementById('sc-solo-name').textContent = T('scenarioSoloName');
+  document.getElementById('sc-solo-desc').textContent = T('scenarioSoloDesc');
+  document.getElementById('sc-solo-lbl').textContent = T('scenarioCostLabel');
+  document.getElementById('sc-team-name').textContent = T('scenarioTeamName');
+  document.getElementById('sc-team-desc').textContent = T('scenarioTeamDesc');
+  document.getElementById('sc-team-lbl').textContent = T('scenarioCostLabel');
+  document.getElementById('sc-large-name').textContent = T('scenarioLargeName');
+  document.getElementById('sc-large-desc').textContent = T('scenarioLargeDesc');
+  document.getElementById('sc-large-lbl').textContent = T('scenarioCostLabel');
+  updateSliderLabels();
+}
+
+function updateSliderLabels() {
+  const d = document.getElementById('sl-devs').value;
+  const c = document.getElementById('sl-chats').value;
+  const ca = document.getElementById('sl-cache').value;
+  document.getElementById('lbl-devs').innerHTML = `${T('lblDevs')} <span class="val">${d}</span>`;
+  document.getElementById('lbl-chats').innerHTML = `${T('lblChats')} <span class="val">${c}</span>`;
+  document.getElementById('lbl-cache').innerHTML = `${T('lblCache')} <span class="val">${ca}%</span>`;
+}
+
+// ══════════════════════════════════════
+// PRICING DATA (per 1M tokens, USD)
+// ══════════════════════════════════════
+const PRICING = {
+  // ── Anthropic ──
+  'claude-opus-4.6':  { name:'Claude Opus 4.6',   provider:'Anthropic', input:5.00,  output:25.00, cacheRead:0.50,   cacheWrite:6.25   },
+  'claude-sonnet-4.6':{ name:'Claude Sonnet 4.6',  provider:'Anthropic', input:3.00,  output:15.00, cacheRead:0.30,   cacheWrite:3.75   },
+  'claude-sonnet-4.5':{ name:'Claude Sonnet 4.5',  provider:'Anthropic', input:3.00,  output:15.00, cacheRead:0.30,   cacheWrite:3.75   },
+  'claude-haiku-4.5': { name:'Claude Haiku 4.5',   provider:'Anthropic', input:1.00,  output:5.00,  cacheRead:0.10,   cacheWrite:1.25   },
+  // ── OpenAI ──
+  'gpt-5.4':          { name:'GPT-5.4',            provider:'OpenAI',    input:2.50,  output:15.00, cacheRead:0.25,   cacheWrite:null   },
+  'gpt-5.3-codex':    { name:'GPT-5.3 Codex',      provider:'OpenAI',    input:1.75,  output:14.00, cacheRead:0.175,  cacheWrite:null   },
+  // ── Cursor ──
+  'cursor-composer-2':     { name:'Composer 2',      provider:'Cursor',    input:0.50,  output:2.50,  cacheRead:0.20,   cacheWrite:null   },
+  'cursor-composer-2-fast':{ name:'Composer 2 Fast',  provider:'Cursor',    input:1.50,  output:7.50,  cacheRead:0.35,   cacheWrite:null   },
+  'cursor-composer-1.5':   { name:'Composer 1.5',     provider:'Cursor',    input:3.50,  output:17.50, cacheRead:0.35,   cacheWrite:3.50   },
+  'cursor-auto':           { name:'Cursor Auto',      provider:'Cursor',    input:1.25,  output:6.00,  cacheRead:0.25,   cacheWrite:null   },
+  // ── Google ──
+  'gemini-2.5-pro':   { name:'Gemini 2.5 Pro',     provider:'Google',    input:1.25,  output:10.00, cacheRead:0.125,  cacheWrite:null   },
+  'gemini-2.5-flash': { name:'Gemini 2.5 Flash',    provider:'Google',    input:0.30,  output:2.50,  cacheRead:0.03,   cacheWrite:null   },
+  // ── DeepSeek ──
+  'deepseek-v3':      { name:'DeepSeek V3',         provider:'DeepSeek',  input:0.14,  output:0.28,  cacheRead:0.014,  cacheWrite:null   },
+  'deepseek-r1':      { name:'DeepSeek R1',          provider:'DeepSeek',  input:0.55,  output:2.19,  cacheRead:0.055,  cacheWrite:null   },
+  // ── Moonshot ──
+  'kimi-k2':          { name:'Kimi K2',              provider:'Moonshot',  input:0.60,  output:2.50,  cacheRead:0.15,   cacheWrite:null   },
+  // ── Alibaba ──
+  'qwen3-max':        { name:'Qwen3 Max',            provider:'Alibaba',   input:0.78,  output:3.90,  cacheRead:0.078,  cacheWrite:null   },
+  'qwen3.5-plus':     { name:'Qwen3.5 Plus',         provider:'Alibaba',   input:0.26,  output:1.56,  cacheRead:0.026,  cacheWrite:null   },
+  // ── xAI ──
+  'grok-3':           { name:'Grok 3',               provider:'xAI',       input:3.00,  output:15.00, cacheRead:0.30,   cacheWrite:null   },
+  // ── Mistral ──
+  'mistral-large':    { name:'Mistral Large 3',        provider:'Mistral',   input:0.50,  output:1.50,  cacheRead:null,   cacheWrite:null   },
+  'mistral-medium-3': { name:'Mistral Medium 3',      provider:'Mistral',   input:0.40,  output:2.00,  cacheRead:0.04,   cacheWrite:null   },
+};
+
+const BRL_RATE = 5.70;
+
+// ══════════════════════════════════════
+// AGENT TOOLS REGISTRY
+// ══════════════════════════════════════
+const AGENT_TOOLS = [
+  { id:'codex',   name:'OpenAI Codex',    icon:'⚡', color:'#10a37f', files:['AGENTS.md','agents.md'] },
+  { id:'claude',  name:'Claude Code',     icon:'🔮', color:'#d97706', files:['CLAUDE.md','CLAUDE.local.md','claude.md'] },
+  { id:'cursor',  name:'Cursor',          icon:'🖱️', color:'#2563eb', files:['.cursorrules','.cursor/rules','.cursor/rules/main.mdc','.cursor/rules/default.mdc'] },
+  { id:'copilot', name:'GitHub Copilot',  icon:'🐙', color:'#6d28d9', files:['.github/copilot-instructions.md'] },
+  { id:'windsurf',name:'Windsurf',        icon:'🏄', color:'#0d9488', files:['.windsurfrules'] },
+  { id:'aider',   name:'Aider',           icon:'🤝', color:'#db2777', files:['CONVENTIONS.md','.aider.conf.yml'] },
+  { id:'devin',   name:'Devin',           icon:'🤖', color:'#7c3aed', files:['.devin/instructions.md','DEVIN.md'] },
+];
+
+const TOOL_COLORS = {};
+AGENT_TOOLS.forEach(t => TOOL_COLORS[t.id] = t.color);
+function toolPill(tid) { const c = TOOL_COLORS[tid]||'#6b7280'; return `style="background:${c}22;color:${c};border-radius:99px;padding:1px 7px;font-size:.67rem;font-weight:700;"`; }
+
+// ══════════════════════════════════════
+// STATE
+// ══════════════════════════════════════
+const STATE = { analyzed:false, totalContextTokens:0, foundByTool:{}, uniqueRefs:[] };
+const LOCAL_STATE = {
+  bootstrap: null,
+  reports: [],
+  comparisons: [],
+  currentFileName: null,
+  currentRepoId: null,
+  folderName: '',
+  warning: '',
+};
+let chartBreakdown=null, chartPerDev=null;
+let sortCol=4, sortDir=-1; // default: sort by $/year desc
+
+// ══════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════
+function estimateTokens(t){return Math.round(t.length/4)}
+function fmtTok(n){return n>=1000?(n/1000).toFixed(1)+'k':String(n)}
+function fmtUSD(n){return n<0.01?'<$0.01':n<1?'$'+n.toFixed(3):n<1000?'$'+n.toFixed(2):'$'+Math.round(n).toLocaleString()}
+function fmtBRL(n){const v=n*BRL_RATE;return v<0.01?'<R$0,01':v<1?'R$'+v.toFixed(3).replace('.',','):v<1000?'R$'+v.toFixed(2).replace('.',','):'R$'+Math.round(v).toLocaleString('pt-BR')}
+function fmt(n){return document.getElementById('chk-brl').checked?fmtBRL(n):fmtUSD(n)}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function normalizeRefPath(p){return String(p||'').replace(/\\/g,'/').replace(/^\.\//,'').replace(/^\/+/,'')}
+function resolveRefPath(basePath,refPath){const raw=normalizeRefPath(refPath);if(!raw)return'';if(!raw.startsWith('.'))return raw;const parts=normalizeRefPath(basePath).split('/').filter(Boolean);if(parts.length)parts.pop();for(const part of raw.split('/')){if(!part||part==='.'){continue}if(part==='..'){if(parts.length)parts.pop();continue}parts.push(part)}return parts.join('/')}
+function isLikelyInlineRef(p){return !!p&&p.length<120&&!/\s/.test(p)&&!p.startsWith('http')&&(p.includes('/')||/\.(md|mdx|txt|json|ya?ml|toml|ini|cfg|conf|xml|html|css|js|cjs|mjs|ts|tsx|jsx|py|rb|go|rs|java|c|cpp|h|hpp|sh)$/i.test(p))}
+function calcRefTok(uniqueRefs){return(uniqueRefs||[]).filter(r=>r.found).reduce((s,r)=>s+r.tokens,0)}
+function calcToolViewTokens(foundByTool,uniqueRefs){const totals={};for(const [toolId,file] of Object.entries(foundByTool||{})){let total=estimateTokens(file.content||'');for(const ref of uniqueRefs||[]){if(ref.found&&ref.fromTools&&ref.fromTools.has(toolId))total+=ref.tokens||0}totals[toolId]=total}return totals}
+function calcMaxToolViewTokens(foundByTool,uniqueRefs){const totals=Object.values(calcToolViewTokens(foundByTool,uniqueRefs));return totals.length?Math.max(...totals):0}
+function calcAllContextTokens(foundByTool,uniqueRefs){const seen=new Set();let total=0;for(const file of Object.values(foundByTool||{})){const path=normalizeRefPath(file&&file.path);if(!path||seen.has(path))continue;seen.add(path);total+=estimateTokens(file.content||'')}for(const ref of uniqueRefs||[]){const path=normalizeRefPath(ref&&ref.path);if(!ref.found||!path||seen.has(path))continue;seen.add(path);total+=ref.tokens||0}return total}
+function setExample(u){document.getElementById('repo-url').value=u;document.getElementById('repo-url').focus()}
+function parseRepoUrl(u){u=u.trim().replace(/\/$/,'');const m=u.match(/github\.com\/([^/]+)\/([^/]+)/);return m?{owner:m[1],repo:m[2].replace(/\.git$/,'')}:null}
+function parseOrgUrl(u){u=u.trim().replace(/[?#].*$/,'').replace(/\/+$/,'');const m=u.match(/^https?:\/\/github\.com\/([^/]+)$/);return m?{org:m[1]}:null}
+function rawUrl(o,r,b,p){return`https://raw.githubusercontent.com/${o}/${r}/${b}/${p}`}
+function makeRepoId(name,index){const slug=String(name||'repo').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'repo';return`${slug}-${index+1}`}
+function byFileName(a,b){return a.fileName.localeCompare(b.fileName)}
+function readJsonFile(file){return file.text().then(text=>JSON.parse(text))}
+function defaultReportFileName(){return LOCAL_STATE.bootstrap&&LOCAL_STATE.bootstrap.defaultReportFile?LOCAL_STATE.bootstrap.defaultReportFile:'agentlens-report.json'}
+function currentReportEntry(){return LOCAL_STATE.reports.find(r=>r.fileName===LOCAL_STATE.currentFileName)||null}
+function currentLocalRepo(){const entry=currentReportEntry();if(!entry)return null;return entry.report.repos.find(r=>r.repoId===LOCAL_STATE.currentRepoId)||entry.report.repos[0]||null}
+function findReportEntry(fileName){return LOCAL_STATE.reports.find(r=>r.fileName===fileName)||null}
+function isTopLevelRelativePath(p){const parts=String(p||'').split('/').filter(Boolean);return parts.length===2}
+function reportSourceLabel(source){return source==='folder'?T('localFolder'):source==='import'?T('localImported'):source==='legacy'?'Legacy':T('localCurrent')}
+function normalizeRef(ref){
+  const fromTools=Array.isArray(ref&&ref.fromTools)?ref.fromTools:(ref&&ref.fromTools?[ref.fromTools]:[]);
+  return {
+    path: ref && ref.path || '',
+    type: ref && ref.type || 'ref',
+    fromTools: new Set(fromTools.filter(Boolean)),
+    found: !!(ref && ref.found),
+    content: ref && ref.content != null ? ref.content : null,
+    tokens: Number(ref && ref.tokens) || 0,
+    absolutePath: ref && ref.absolutePath || null,
+  };
+}
+function normalizeRepoData(repo,index){
+  return {
+    ...repo,
+    repoId: repo&&repo.repoId ? repo.repoId : makeRepoId(repo&&repo.repoName,index),
+    foundByTool: repo&&repo.foundByTool ? repo.foundByTool : {},
+    uniqueRefs: Array.isArray(repo&&repo.uniqueRefs) ? repo.uniqueRefs.map(normalizeRef) : [],
+    agentTok: Number(repo&&repo.agentTok) || 0,
+    refTok: Number(repo&&repo.refTok) || 0,
+    viewTokensByTool: repo&&repo.viewTokensByTool&&typeof repo.viewTokensByTool==='object' ? repo.viewTokensByTool : {},
+    allContextTokens: Number(repo&&repo.allContextTokens) || 0,
+    totalContextTokens: Number(repo&&repo.totalContextTokens) || 0,
+    noFiles: !!(repo&&repo.noFiles),
+  };
+}
+function normalizeReportDoc(doc,fileName){
+  if(!doc||typeof doc!=='object')return null;
+  const report=(!doc.kind&&Array.isArray(doc.repos))?{kind:'agentlens-report',schemaVersion:0,generatedAt:doc.generatedAt||null,cliVersion:doc.cliVersion||null,baselines:doc.baselines||[],repos:doc.repos}:doc;
+  if(report.kind!=='agentlens-report'||!Array.isArray(report.repos))return null;
+  return {
+    kind:'agentlens-report',
+    schemaVersion:Number(report.schemaVersion)||1,
+    generatedAt:report.generatedAt||null,
+    cliVersion:report.cliVersion||null,
+    baselines:Array.isArray(report.baselines)?report.baselines.filter(x=>typeof x==='string'):[],
+    repos:report.repos.map((repo,index)=>normalizeRepoData(repo,index)),
+    fileName:fileName||report.fileName||defaultReportFileName(),
+  };
+}
+function normalizeComparisonItem(item){
+  if(!item||typeof item!=='object')return null;
+  if(item.type==='github-repo'&&typeof item.key==='string'){
+    const parsed=parseRepoUrl(`https://github.com/${item.key}`);
+    if(!parsed)return null;
+    return { type:'github-repo', key:item.key, owner:parsed.owner, repo:parsed.repo };
+  }
+  if(item.type==='report-repo'&&typeof item.file==='string'&&typeof item.repoId==='string'){
+    return { type:'report-repo', file:item.file, repoId:item.repoId };
+  }
+  return null;
+}
+function normalizeComparisonDoc(doc,fileName){
+  if(!doc||typeof doc!=='object'||doc.kind!=='agentlens-comparison'||!Array.isArray(doc.items))return null;
+  return {
+    kind:'agentlens-comparison',
+    schemaVersion:Number(doc.schemaVersion)||1,
+    generatedAt:doc.generatedAt||null,
+    title:doc.title||'AgentLens Comparison',
+    settings:{
+      modelId:doc.settings&&doc.settings.modelId||'claude-sonnet-4.6',
+      devs:Number(doc.settings&&doc.settings.devs)||5,
+      chats:Number(doc.settings&&doc.settings.chats)||15,
+    },
+    embeddedReports:(doc.embeddedReports&&typeof doc.embeddedReports==='object')?doc.embeddedReports:null,
+    items:doc.items.map(normalizeComparisonItem).filter(Boolean),
+    fileName:fileName||'agentlens-comparison.json',
+  };
+}
+function readBootstrapConfig(){
+  const el=document.getElementById('agentlens-bootstrap');
+  if(!el)return null;
+  try{
+    const data=JSON.parse(el.textContent);
+    return data&&data.kind==='agentlens-bootstrap'?data:null;
+  }catch(e){return null}
+}
+
+// Reference parser
+function parseReferences(content){
+  const found=new Map();
+  for(const line of content.split('\n')){
+    const t=line.trim();
+    let m=t.match(/^@import\s+["']?([^\s"']+)["']?/);
+    if(m){addR(found,m[1],'import');continue}
+    m=t.match(/^[!]?include[:\s]+["']?([^\s"']+\.[a-zA-Z0-9]+)["']?/i);
+    if(m){addR(found,m[1],'include');continue}
+    m=t.match(/^@(?:file\s+)?([^\s@#]+\.[a-zA-Z0-9]+)/);
+    if(m&&!m[1].startsWith('http')){addR(found,m[1],'ref');continue}
+    const lr=/\[([^\]]*)\]\(([^)]+)\)/g;let lm;
+    while((lm=lr.exec(line))!==null){const h=lm[2].split('#')[0].trim();if(h&&!h.startsWith('http')&&!h.startsWith('mailto')&&h.includes('.'))addR(found,h,'link')}
+    m=t.match(/^context[_-]?files?:\s*\[([^\]]+)\]/i);
+    if(m){m[1].split(',').forEach(f=>{const p=f.trim().replace(/["']/g,'');if(p)addR(found,p,'context')});continue}
+    const cr=/`([^`]+\.[a-zA-Z0-9]+)`/g;let cm;
+    while((cm=cr.exec(line))!==null){const p=cm[1];if(isLikelyInlineRef(p))addR(found,p,'inline-code')}
+  }
+  return Array.from(found.values());
+}
+function addR(map,raw,type){const p=raw.replace(/^\.\//,'').replace(/^\//,'');if(!p||p.startsWith('http')||p.length>200)return;if(!map.has(p))map.set(p,{path:p,type})}
+
+// Markdown renderer
+function renderMd(md){let h=md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/```(\w*)\n?([\s\S]*?)```/g,(_,l,c)=>`<pre><code>${c.trim()}</code></pre>`).replace(/^#{4}\s(.+)$/gm,'<h4>$1</h4>').replace(/^#{3}\s(.+)$/gm,'<h3>$1</h3>').replace(/^#{2}\s(.+)$/gm,'<h2>$1</h2>').replace(/^#{1}\s(.+)$/gm,'<h1>$1</h1>').replace(/^---+$/gm,'<hr>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>').replace(/^&gt;\s(.+)$/gm,'<blockquote>$1</blockquote>').replace(/^[-*+]\s(.+)$/gm,'<li>$1</li>').replace(/(<li>.*<\/li>\n?)+/gs,m=>`<ul>${m}</ul>`).replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>');return`<p>${h}</p>`}
+
+// UI helpers
+function showStatus(m,t='loading'){const i={loading:'<div class="spinner"></div>',error:'❌',warn:'⚠️'}[t]||'';document.getElementById('status-area').innerHTML=`<div class="status-card ${t}">${i}<span>${m}</span></div>`}
+function clearStatus(){document.getElementById('status-area').innerHTML=''}
+function showPanel(id,btn){document.querySelectorAll('.main-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));btn.classList.add('active');document.getElementById(id).classList.add('active');if(id==='panel-cost')recalcCost()}
+function switchTab(btn,tabId,blockId){const bl=document.getElementById(blockId);bl.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));bl.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));btn.classList.add('active');bl.querySelector('#'+tabId).classList.add('active')}
+function toggleRef(el){el.parentElement.querySelector('.ref-content').classList.toggle('open')}
+function toggleAgentFile(el){el.parentElement.querySelector('.agent-file-body').classList.toggle('open')}
+
+// ══════════════════════════════════════
+// CORE REPO ANALYZER (reusable, no DOM)
+// ══════════════════════════════════════
+async function analyzeRepoData(owner,repo){
+  const branches=['main','master','develop','trunk'];
+  let usedBranch=null;
+  for(const b of branches){
+    try{
+      const r=await fetch(rawUrl(owner,repo,b,'README.md'),{method:'HEAD'});
+      if(r.ok){usedBranch=b;break}
+      if(r.status===403)return{ok:false,error:'private'}
+    }catch(e){}
+  }
+  if(!usedBranch){
+    for(const b of branches){
+      try{
+        for(const f of ['AGENTS.md','CLAUDE.md','LICENSE']){
+          const r=await fetch(rawUrl(owner,repo,b,f),{method:'HEAD'});
+          if(r.ok){usedBranch=b;break}
+        }
+        if(usedBranch)break
+      }catch(e){return{ok:false,error:'network'}}
+    }
+  }
+  if(!usedBranch)return{ok:false,error:'notfound'}
+
+  const fetchF=async p=>{try{const r=await fetch(rawUrl(owner,repo,usedBranch,p));if(r.ok)return{path:p,content:await r.text(),found:true}}catch(e){}return{path:p,content:null,found:false}};
+
+  const all=[];AGENT_TOOLS.forEach(t=>t.files.forEach(f=>all.push({toolId:t.id,filePath:f})));
+  const res=await Promise.all(all.map(async({toolId,filePath})=>{const r=await fetchF(filePath);return{toolId,...r}}));
+
+  const foundByTool={};
+  for(const r of res)if(r.found&&!foundByTool[r.toolId])foundByTool[r.toolId]={path:r.path,content:r.content};
+
+  const foundTools=AGENT_TOOLS.filter(t=>foundByTool[t.id]);
+  if(!foundTools.length)return{ok:true,branch:usedBranch,foundByTool:{},uniqueRefs:[],agentTok:0,refTok:0,totalContextTokens:0,noFiles:true};
+
+  const refPool=new Map();
+  const parsedCache=new Map();
+  const queue=[];
+  function enqueue(toolId,basePath,ref){
+    const resolvedPath=resolveRefPath(basePath,ref.path);
+    if(!resolvedPath)return;
+    if(!refPool.has(resolvedPath)){
+      refPool.set(resolvedPath,{path:resolvedPath,type:ref.type,fromTools:new Set([toolId]),found:false,content:null,tokens:0});
+      queue.push({toolId,path:resolvedPath});
+      return;
+    }
+    const existing=refPool.get(resolvedPath);
+    if(!existing.fromTools.has(toolId)){
+      existing.fromTools.add(toolId);
+      queue.push({toolId,path:resolvedPath});
+    }
+  }
+  for(const tool of foundTools){
+    const file=foundByTool[tool.id];
+    for(const ref of parseReferences(file.content))enqueue(tool.id,file.path,ref);
+  }
+  while(queue.length){
+    const current=queue.shift();
+    const entry=refPool.get(current.path);
+    if(!entry)continue;
+    if(!entry.found&&entry.content==null){
+      try{
+        const r=await fetch(rawUrl(owner,repo,usedBranch,entry.path));
+        if(r.ok){
+          entry.content=await r.text();
+          entry.found=true;
+          entry.tokens=estimateTokens(entry.content);
+        }else{
+          entry.content=null;
+          entry.found=false;
+          entry.tokens=0;
+        }
+      }catch(e){
+        entry.content=null;
+        entry.found=false;
+        entry.tokens=0;
+      }
+    }
+    if(!entry.found||!entry.content)continue;
+    if(!parsedCache.has(entry.path))parsedCache.set(entry.path,parseReferences(entry.content));
+    for(const ref of parsedCache.get(entry.path))enqueue(current.toolId,entry.path,ref);
+  }
+  const uniqueRefs=Array.from(refPool.values());
+
+  const agentTok=foundTools.reduce((s,t)=>s+estimateTokens(foundByTool[t.id].content),0);
+  const refTok=calcRefTok(uniqueRefs);
+  const viewTokensByTool=calcToolViewTokens(foundByTool,uniqueRefs);
+  const allContextTokens=calcAllContextTokens(foundByTool,uniqueRefs);
+  return{ok:true,branch:usedBranch,foundByTool,uniqueRefs,agentTok,refTok,viewTokensByTool,allContextTokens,totalContextTokens:calcMaxToolViewTokens(foundByTool,uniqueRefs)}
+}
+
+// ══════════════════════════════════════
+// MAIN ANALYZE (single repo + UI)
+// ══════════════════════════════════════
+async function analyze(){
+  const url=document.getElementById('repo-url').value.trim();
+  if(!url){showStatus(`⚠️ ${T('errEnterUrl')}`,'warn');return}
+  const parsed=parseRepoUrl(url);
+  if(!parsed){showStatus(`❌ ${T('errInvalidUrl')}`,'error');return}
+  const{owner,repo}=parsed;
+  const btn=document.getElementById('fetch-btn');
+  btn.disabled=true;document.getElementById('btn-icon').textContent='⏳';document.getElementById('btn-text').textContent='…';
+  document.getElementById('results').classList.add('hidden');document.getElementById('empty-state').classList.add('hidden');
+  showStatus(`${T('scanning')} …`,'loading');
+
+  const data=await analyzeRepoData(owner,repo);
+
+  const resetBtn=()=>{btn.disabled=false;document.getElementById('btn-icon').textContent='🔍';document.getElementById('btn-text').textContent=T('btnAnalyze');document.getElementById('empty-state').classList.remove('hidden')};
+
+  if(!data.ok){
+    if(data.error==='network')showStatus(`🌐 ${T('errNetwork')}`,'error');
+    else showStatus(`🔒 ${T('errPrivate')}<br><span style="font-weight:400;font-size:.84rem;color:var(--g500)">${T('errPrivateDetail')}</span>`,'error');
+    resetBtn();return
+  }
+  if(data.noFiles){showStatus(T('noFiles'),'warn');resetBtn();return}
+
+  STATE.analyzed=true;STATE.totalContextTokens=data.totalContextTokens;STATE.foundByTool=data.foundByTool;STATE.uniqueRefs=data.uniqueRefs;
+
+  clearStatus();
+  renderDetection(data.foundByTool,data.uniqueRefs,data.branch);
+  renderDetectionExtras(`${parsed.owner}/${parsed.repo}`,data.foundByTool,data.totalContextTokens||data.agentTok+data.refTok||0);
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  recalcCost();
+  btn.disabled=false;document.getElementById('btn-icon').textContent='🔍';document.getElementById('btn-text').textContent=T('btnAnalyze');
+  document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ══════════════════════════════════════
+// LOCAL REPORTS / COMPARISONS
+// ══════════════════════════════════════
+function updateLocalWorkspaceMeta(message){
+  document.getElementById('local-workspace-meta').textContent=message||T('workspaceIdle');
+}
+function renderLocalBanner(){
+  const banner=document.getElementById('local-banner');
+  const entry=currentReportEntry();
+  const repo=currentLocalRepo();
+  if(!entry||!repo){
+    banner.classList.add('hidden');
+    return;
+  }
+  const scanDate=entry.report.generatedAt?new Date(entry.report.generatedAt).toLocaleString(): '';
+  banner.classList.remove('hidden');
+  banner.innerHTML=`
+    <div class="lb-icon">🖥️</div>
+    <div class="lb-body">
+      <div class="lb-title">${esc(repo.repoName)} · ${esc(entry.fileName)}</div>
+      <div class="lb-meta">${esc(repo.localPath||repo.repoName)}${scanDate?` · ${esc(scanDate)}`:''}</div>
+    </div>
+    <div class="lb-badge">~${fmtTok(repo.totalContextTokens||0)} tokens</div>`;
+}
+function setLocalWarning(message){
+  LOCAL_STATE.warning=message||'';
+  const el=document.getElementById('local-workspace-warning');
+  if(LOCAL_STATE.warning){
+    el.innerHTML=`<span>⚠️</span><span>${esc(LOCAL_STATE.warning)}</span>`;
+    el.classList.remove('hidden');
+  }else{
+    el.innerHTML='';
+    el.classList.add('hidden');
+  }
+}
+function registerReportDoc(report, source){
+  const existingIndex=LOCAL_STATE.reports.findIndex(x=>x.fileName===report.fileName);
+  const entry={ fileName:report.fileName, report, source, baselinesQueued:false };
+  if(existingIndex>=0){
+    const prev=LOCAL_STATE.reports[existingIndex];
+    entry.baselinesQueued=prev.baselinesQueued;
+    LOCAL_STATE.reports.splice(existingIndex,1,entry);
+  }else{
+    LOCAL_STATE.reports.push(entry);
+    LOCAL_STATE.reports.sort(byFileName);
+  }
+  return LOCAL_STATE.reports.find(x=>x.fileName===report.fileName)||entry;
+}
+function registerComparisonDoc(comparison, source){
+  const existingIndex=LOCAL_STATE.comparisons.findIndex(x=>x.fileName===comparison.fileName);
+  const entry={ fileName:comparison.fileName, comparison, source };
+  if(existingIndex>=0)LOCAL_STATE.comparisons.splice(existingIndex,1,entry);
+  else{
+    LOCAL_STATE.comparisons.push(entry);
+    LOCAL_STATE.comparisons.sort(byFileName);
+  }
+  renderSavedComparisons();
+  return LOCAL_STATE.comparisons.find(x=>x.fileName===comparison.fileName)||entry;
+}
+function ensureBaselinesQueued(reportEntry){
+  if(!reportEntry||reportEntry.baselinesQueued)return;
+  (reportEntry.report.baselines||[]).forEach(key=>{
+    const parsed=parseRepoUrl(`https://github.com/${key}`);
+    if(parsed)addCompareItem({ type:'github-repo', key, owner:parsed.owner, repo:parsed.repo }, { silent:true });
+  });
+  reportEntry.baselinesQueued=true;
+}
+function setCurrentLocalRepo(fileName, repoId){
+  const entry=findReportEntry(fileName);
+  if(!entry)return;
+  const repo=entry.report.repos.find(r=>r.repoId===repoId)||entry.report.repos[0];
+  if(!repo)return;
+  LOCAL_STATE.currentFileName=entry.fileName;
+  LOCAL_STATE.currentRepoId=repo.repoId;
+  ensureBaselinesQueued(entry);
+  STATE.analyzed=true;
+  STATE.totalContextTokens=repo.totalContextTokens||0;
+  STATE.foundByTool=repo.foundByTool||{};
+  STATE.uniqueRefs=repo.uniqueRefs||[];
+  clearStatus();
+  renderDetection(repo.foundByTool||{}, repo.uniqueRefs||[], repo.repoName||entry.fileName);
+  renderDetectionExtras(repo.repoName||entry.fileName, repo.foundByTool||{}, repo.totalContextTokens||0);
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  recalcCost();
+  renderLocalBanner();
+  renderLocalWorkspace();
+}
+function resolveCompareItem(item){
+  if(item.type==='github-repo')return{ ok:true, kind:'github-repo', item };
+  const entry=findReportEntry(item.file);
+  if(!entry)return{ ok:false, error:'missing-file', item };
+  const repo=entry.report.repos.find(r=>r.repoId===item.repoId);
+  if(!repo)return{ ok:false, error:'missing-repo', item, entry };
+  return{ ok:true, kind:'report-repo', item, entry, repo };
+}
+function renderLocalWorkspace(){
+  const currentEntry=currentReportEntry();
+  const reportList=document.getElementById('local-reports-list');
+  updateLocalWorkspaceMeta(
+    LOCAL_STATE.folderName
+      ? `${T('workspaceLoaded')} · ${LOCAL_STATE.folderName}`
+      : (currentEntry ? `${T('workspaceLoaded')} · ${currentEntry.fileName}` : T('workspaceIdle'))
+  );
+  renderHistoricalSnapshots();
+  reportList.innerHTML=LOCAL_STATE.reports.length?LOCAL_STATE.reports.map((entry,reportIndex)=>{
+    const isCurrent=currentEntry&&currentEntry.fileName===entry.fileName;
+    const scanDate=entry.report.generatedAt?new Date(entry.report.generatedAt).toLocaleString():'';
+    return `<div class="library-item">
+      <div class="library-file">${esc(entry.fileName)}${isCurrent?` · ${T('localCurrent')}`:''}</div>
+      <div class="library-meta">${reportSourceLabel(entry.source)} · ${entry.report.repos.length} repo(s)${scanDate?` · ${esc(scanDate)}`:''}</div>
+      <div class="library-repo-list">
+        ${entry.report.repos.map((repo,repoIndex)=>{
+          const active=isCurrent&&LOCAL_STATE.currentRepoId===repo.repoId;
+          return `<div class="library-repo-row">
+            <div>
+              <div class="repo-name">${esc(repo.repoName||repo.repoId)}</div>
+              <div class="repo-meta">${fmtTok(repo.totalContextTokens||0)} tokens${repo.noFiles?` · ${T('cmpNoConfigs')}`:''}${active?' · active':''}</div>
+            </div>
+            <div class="library-repo-actions">
+              <button onclick="openLocalRepo(${reportIndex},${repoIndex})">${T('reportOpen')}</button>
+              <button onclick="addLocalRepoToCompare(${reportIndex},${repoIndex})">${T('reportCompare')}</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join(''):`<div class="library-empty">${T('workspaceNoReports')}</div>`;
+}
+function openLocalRepo(reportIndex, repoIndex){
+  const entry=LOCAL_STATE.reports[reportIndex];
+  if(!entry)return;
+  const repo=entry.report.repos[repoIndex];
+  if(repo){setCurrentLocalRepo(entry.fileName, repo.repoId);setArea('analyze');}
+}
+function addLocalRepoToCompare(reportIndex, repoIndex){
+  const entry=LOCAL_STATE.reports[reportIndex];
+  if(!entry)return;
+  const repo=entry.report.repos[repoIndex];
+  if(repo)addCompareItem({ type:'report-repo', file:entry.fileName, repoId:repo.repoId });
+}
+function loadSavedComparison(index){
+  const entry=LOCAL_STATE.comparisons[index];
+  if(entry)loadComparisonDocument(entry.comparison);
+}
+async function ingestFolderJsonFiles(files, folderName){
+  LOCAL_STATE.folderName=folderName||LOCAL_STATE.folderName;
+  LOCAL_STATE.reports=LOCAL_STATE.reports.filter(x=>x.source!=='folder');
+  LOCAL_STATE.comparisons=LOCAL_STATE.comparisons.filter(x=>x.source!=='folder');
+  const docs=await Promise.all(files.map(async ({fileName,file})=>{
+    try{
+      const json=await readJsonFile(file);
+      return { fileName, json };
+    }catch(e){ return null }
+  }));
+  docs.filter(Boolean).forEach(({fileName,json})=>{
+    const report=normalizeReportDoc(json,fileName);
+    if(report){registerReportDoc(report,'folder');return}
+    const comparison=normalizeComparisonDoc(json,fileName);
+    if(comparison)registerComparisonDoc(comparison,'folder');
+  });
+  if(LOCAL_STATE.bootstrap&&LOCAL_STATE.bootstrap.defaultReportFile&&findReportEntry(LOCAL_STATE.bootstrap.defaultReportFile)){
+    const entry=findReportEntry(LOCAL_STATE.bootstrap.defaultReportFile);
+    setCurrentLocalRepo(entry.fileName, LOCAL_STATE.currentRepoId||entry.report.repos[0]&&entry.report.repos[0].repoId);
+  }else if(!currentReportEntry()&&LOCAL_STATE.reports[0]&&LOCAL_STATE.reports[0].report.repos[0]){
+    setCurrentLocalRepo(LOCAL_STATE.reports[0].fileName, LOCAL_STATE.reports[0].report.repos[0].repoId);
+  }
+  setLocalWarning('');
+  renderLocalWorkspace();
+  renderCmpQueue();
+  renderSavedComparisons();
+}
+async function openReportFolder(){
+  try{
+    if(window.showDirectoryPicker){
+      const handle=await window.showDirectoryPicker();
+      const files=[];
+      for await(const [name,entry] of handle.entries()){
+        if(entry.kind==='file'&&name.toLowerCase().endsWith('.json'))files.push({ fileName:name, file:await entry.getFile() });
+      }
+      await ingestFolderJsonFiles(files, handle.name||'folder');
+      return;
+    }
+  }catch(err){
+    if(err&&err.name==='AbortError')return;
+  }
+  document.getElementById('folder-input').click();
+}
+async function handleFolderSelection(event){
+  const files=Array.from(event.target.files||[]).filter(f=>f.name.toLowerCase().endsWith('.json')&&isTopLevelRelativePath(f.webkitRelativePath));
+  const folderName=files[0]&&files[0].webkitRelativePath.split('/')[0]||'folder';
+  await ingestFolderJsonFiles(files.map(file=>({ fileName:file.name, file })), folderName);
+  event.target.value='';
+}
+function triggerReportImport(){document.getElementById('report-input').click()}
+function triggerComparisonImport(){document.getElementById('comparison-input').click()}
+async function handleReportImport(event){
+  const files=Array.from(event.target.files||[]);
+  let firstImported=null;
+  for(const file of files){
+    try{
+      const report=normalizeReportDoc(await readJsonFile(file), file.name);
+      if(!report){setLocalWarning(T('invalidReportJson'));continue}
+      registerReportDoc(report,'import');
+      if(!firstImported)firstImported=report;
+    }catch(e){setLocalWarning(T('invalidReportJson'))}
+  }
+  if(firstImported&&!currentReportEntry()&&firstImported.repos[0])setCurrentLocalRepo(firstImported.fileName, firstImported.repos[0].repoId);
+  renderLocalWorkspace();
+  renderCmpQueue();
+  event.target.value='';
+}
+async function handleComparisonImport(event){
+  const file=event.target.files&&event.target.files[0];
+  if(!file)return;
+  try{
+    const comparison=normalizeComparisonDoc(await readJsonFile(file), file.name);
+    if(!comparison){setLocalWarning(T('invalidComparisonJson'));event.target.value='';return}
+    registerComparisonDoc(comparison,'import');
+    loadComparisonDocument(comparison);
+  }catch(e){setLocalWarning(T('invalidComparisonJson'))}
+  event.target.value='';
+}
+async function loadBootstrapReport(){
+  LOCAL_STATE.bootstrap=readBootstrapConfig();
+  if(LOCAL_STATE.bootstrap&&LOCAL_STATE.bootstrap.defaultReportFile){
+    try{
+      const resp=await fetch(LOCAL_STATE.bootstrap.defaultReportFile);
+      if(!resp.ok)throw new Error('fetch-failed');
+      const report=normalizeReportDoc(await resp.json(), LOCAL_STATE.bootstrap.defaultReportFile);
+      if(!report)throw new Error('invalid-report');
+      registerReportDoc(report,'current');
+      if(report.repos[0])setCurrentLocalRepo(report.fileName, report.repos[0].repoId);
+      return;
+    }catch(e){
+      setLocalWarning(T('workspaceFetchWarn'));
+    }
+  }
+  const legacySeed=window.AGENTLENS_LOCAL_DATA;
+  if(legacySeed&&Array.isArray(legacySeed.repos)&&legacySeed.repos.length){
+    const report=normalizeReportDoc({
+      kind:'agentlens-report',
+      schemaVersion:0,
+      generatedAt:legacySeed.generatedAt||null,
+      cliVersion:legacySeed.cliVersion||null,
+      baselines:legacySeed.baselines||[],
+      repos:legacySeed.repos,
+    }, defaultReportFileName());
+    if(report){
+      registerReportDoc(report,'legacy');
+      if(report.repos[0])setCurrentLocalRepo(report.fileName, report.repos[0].repoId);
+    }
+  }
+}
+
+// ══════════════════════════════════════
+// AREA SWITCHER
+// ══════════════════════════════════════
+function setArea(area){
+  ['analyze','compare','org','reports'].forEach(a=>{
+    document.getElementById(`area-${a}`).classList.toggle('hidden',a!==area);
+    document.getElementById(`area-tab-${a}`).classList.toggle('active',a===area);
+  });
+  if(area==='compare'&&COMPARE_STATE.results.length)renderCompareResults();
+}
+function setMode(mode){setArea(mode==='compare'?'compare':'analyze')}
+
+// ══════════════════════════════════════
+// COMPARE REPOS
+// ══════════════════════════════════════
+const COMPARE_STATE={items:[],results:[],chart:null};
+const ORG_SCAN_STATE={
+  org:null,
+  ownerType:null,
+  totalRepos:0,
+  scannedCount:0,
+  scanning:false,
+  done:false,
+  repos:[],
+  configured:[],
+  unconfigured:[],
+  selected:new Set(),
+  page:0,
+  pageSize:25,
+  sortBy:'tokens',
+  sortDir:-1,
+  unconfiguredVisible:false,
+};
+
+// ── Org Scan Functions ──
+async function fetchOrgRepos(org){
+  const targets=[
+    {type:'organization',url:(page)=>`https://api.github.com/orgs/${org}/repos?per_page=100&page=${page}&type=public&sort=created&direction=desc`},
+    {type:'user',url:(page)=>`https://api.github.com/users/${org}/repos?per_page=100&page=${page}&type=owner&sort=created&direction=desc`}
+  ];
+  for(const target of targets){
+    const repos=[];
+    let page=1;
+    let notFound=false;
+    while(true){
+      let r;
+      try{
+        r=await fetch(target.url(page));
+      }catch(e){return{error:'network'}}
+      if(r.status===404){notFound=true;break}
+      if(r.status===403||r.status===429)return{error:'ratelimit'};
+      if(!r.ok)return{error:'network'};
+      const data=await r.json();
+      if(!Array.isArray(data))return{error:'network'};
+      repos.push(...data);
+      if(data.length<100)break;
+      page++;
+      await new Promise(res=>setTimeout(res,300));
+    }
+    if(!notFound)return{repos,ownerType:target.type};
+  }
+  return{error:'notfound'};
+}
+function showOrgPanel(){document.getElementById('org-scan-panel').classList.remove('hidden')}
+function hideOrgPanel(){
+  document.getElementById('org-scan-panel').classList.add('hidden');
+  ORG_SCAN_STATE.org=null;
+  ORG_SCAN_STATE.ownerType=null;
+  ORG_SCAN_STATE.scanning=false;
+  ORG_SCAN_STATE.done=false;
+}
+function renderOrgProgress(phase){
+  const panel=document.getElementById('org-scan-panel');
+  const org=esc(ORG_SCAN_STATE.org);
+  if(phase==='fetching'){
+    panel.innerHTML=`<div class="org-progress-card"><div style="display:flex;align-items:center;gap:12px"><div class="spinner"></div><span>${T('orgFetching')} <strong>${org}</strong>…</span></div></div>`;
+    return;
+  }
+  const pct=ORG_SCAN_STATE.totalRepos>0?Math.round((ORG_SCAN_STATE.scannedCount/ORG_SCAN_STATE.totalRepos)*100):0;
+  const msg=`${T('orgScanning')} <strong>${ORG_SCAN_STATE.scannedCount} ${T('orgOf')} ${ORG_SCAN_STATE.totalRepos}</strong>`;
+  panel.innerHTML=`<div class="org-progress-card">
+    <div style="display:flex;align-items:center;gap:12px"><div class="spinner"></div><span>${msg}</span></div>
+    <div class="org-progress-bar-wrap"><div class="org-progress-bar" style="width:${pct}%"></div></div>
+    <div style="font-size:.78rem;color:var(--g400)">${ORG_SCAN_STATE.configured.length} ${T('orgConfiguredTitle').toLowerCase()} · ${ORG_SCAN_STATE.unconfigured.length} ${T('orgUnconfiguredTitle').toLowerCase().split(' (')[0]}</div>
+  </div>`;
+}
+function renderOrgError(errorCode){
+  const msgs={notfound:T('orgNotFound'),ratelimit:T('orgRateLimit'),network:T('orgNetworkError')};
+  document.getElementById('org-scan-panel').innerHTML=`<div class="status-card error">❌ <span>${msgs[errorCode]||errorCode}</span></div>`;
+  ORG_SCAN_STATE.scanning=false;
+}
+function sortedOrgConfigured(){
+  const arr=[...ORG_SCAN_STATE.configured];
+  const d=ORG_SCAN_STATE.sortDir;
+  if(ORG_SCAN_STATE.sortBy==='tokens')arr.sort((a,b)=>d*((b.totalContextTokens||0)-(a.totalContextTokens||0)));
+  else if(ORG_SCAN_STATE.sortBy==='stars')arr.sort((a,b)=>d*((b.stars||0)-(a.stars||0)));
+  else if(ORG_SCAN_STATE.sortBy==='date')arr.sort((a,b)=>d*(new Date(b.createdAt)-new Date(a.createdAt)));
+  else arr.sort((a,b)=>d*a.name.localeCompare(b.name));
+  return arr;
+}
+function renderOrgResults(){
+  const panel=document.getElementById('org-scan-panel');
+  const cfg=sortedOrgConfigured();
+  const uncfg=ORG_SCAN_STATE.unconfigured;
+  const sel=ORG_SCAN_STATE.selected;
+  const pg=ORG_SCAN_STATE.page;
+  const ps=ORG_SCAN_STATE.pageSize;
+  const totalPages=Math.max(1,Math.ceil(cfg.length/ps));
+  const safePg=Math.min(pg,totalPages-1);
+  if(safePg!==pg)ORG_SCAN_STATE.page=safePg;
+  const pageRows=cfg.slice(safePg*ps,(safePg+1)*ps);
+  const allOnPageSelected=pageRows.length>0&&pageRows.every(r=>sel.has(r.fullName));
+  const sortBtn=(key,label)=>`<button class="org-sort-btn${ORG_SCAN_STATE.sortBy===key?' active':''}" onclick="orgSetSort('${key}')">${label}${ORG_SCAN_STATE.sortBy===key?(ORG_SCAN_STATE.sortDir===-1?' ▼':' ▲'):''}</button>`;
+  const tableRows=pageRows.map(r=>{
+    const tok=r.totalContextTokens||0;
+    const hc=tok<5000?'#16a34a':tok<10000?'#d97706':tok<20000?'#ea580c':'#dc2626';
+    const foundToolIds=Object.keys(r.foundByTool||{});
+    const pills=foundToolIds.map(tid=>{const t=AGENT_TOOLS.find(x=>x.id===tid);return t?`<span style="background:${t.color}22;color:${t.color};border-radius:99px;padding:1px 7px;font-size:.67rem;font-weight:700;display:inline-block;margin:1px">${t.icon} ${t.name}</span>`:''}).join('');
+    const dateStr=r.createdAt?r.createdAt.slice(0,10):'—';
+    const checked=sel.has(r.fullName)?'checked':'';
+    return`<tr>
+      <td style="width:28px"><input type="checkbox" ${checked} onchange="orgToggleSelect('${esc(r.fullName)}')" style="width:16px;height:16px;accent-color:var(--blue)"></td>
+      <td><a class="org-repo-name" href="https://github.com/${esc(r.fullName)}" target="_blank">${esc(r.name)}</a>${r.description?`<div class="org-repo-desc">${esc(r.description)}</div>`:''}${r.language?`<span class="org-repo-lang">${esc(r.language)}</span>`:''}</td>
+      <td>${pills||'<span style="color:var(--g300);font-size:.8rem">—</span>'}</td>
+      <td class="num"><span style="color:${hc};font-weight:800">${fmtTok(tok)}</span></td>
+      <td class="num" style="color:var(--g500)">${r.stars>0?r.stars.toLocaleString():'—'}</td>
+      <td class="num" style="color:var(--g400);font-size:.8rem">${dateStr}</td>
+    </tr>`;
+  }).join('');
+  const pagination=totalPages>1?`<div class="org-pagination">
+    <button class="org-page-btn" onclick="orgSetPage(${safePg-1})" ${safePg===0?'disabled':''}>‹ ${T('orgPrev')}</button>
+    <span class="org-page-info">${T('orgShowingPage')} ${safePg+1} / ${totalPages}</span>
+    <button class="org-page-btn" onclick="orgSetPage(${safePg+1})" ${safePg>=totalPages-1?'disabled':''}>${T('orgNext')} ›</button>
+  </div>`:'';
+  const unconfiguredSection=uncfg.length?`<div style="margin-top:16px">
+    <div class="org-section-header">
+      <span class="org-section-title">${T('orgUnconfiguredTitle')}</span>
+      <span class="org-badge gray">${uncfg.length}</span>
+      <button class="org-unconfigured-toggle" onclick="orgToggleUnconfigured()">${ORG_SCAN_STATE.unconfiguredVisible?T('orgUnconfiguredToggleHide'):T('orgUnconfiguredToggleShow')}</button>
+    </div>
+    ${ORG_SCAN_STATE.unconfiguredVisible?`<div class="org-unconfigured-list">${uncfg.map(r=>`<span class="org-unconfigured-chip"><a href="https://github.com/${esc(r.fullName)}" target="_blank" style="color:inherit;text-decoration:none">${esc(r.name)}</a></span>`).join('')}</div>`:''}
+  </div>`:'';
+  const selCount=sel.size;
+  const ownerIcon=ORG_SCAN_STATE.ownerType==='user'?'👤':'🏢';
+  panel.innerHTML=`<div class="org-progress-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="org-section-title" style="font-size:1rem">${ownerIcon} ${esc(ORG_SCAN_STATE.org)}</div>
+        <div style="font-size:.8rem;color:var(--g400);margin-top:2px">${ORG_SCAN_STATE.totalRepos} ${T('orgPublicScanned')}</div>
+      </div>
+      <button onclick="hideOrgPanel()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--g400)">✕</button>
+    </div>
+    <div class="org-section-header" style="margin-top:18px">
+      <span class="org-section-title">${T('orgConfiguredTitle')}</span>
+      <span class="org-badge">${cfg.length}</span>
+    </div>
+    ${cfg.length===0?`<div style="color:var(--g400);font-size:.88rem;padding:12px 0">${T('orgNoConfigured')}</div>`:`
+    <div class="org-controls">
+      <span style="font-size:.78rem;font-weight:700;color:var(--g500);text-transform:uppercase">${T('orgSortLabel')}</span>
+      ${sortBtn('tokens',T('orgSortTokens'))}
+      ${sortBtn('stars',T('orgSortStars'))}
+      ${sortBtn('date',T('orgSortDate'))}
+      ${sortBtn('name',T('orgSortName'))}
+      <button class="org-select-btn" onclick="orgSelectPageToggle()">${allOnPageSelected?T('orgDeselectAll'):T('orgSelectAll')}</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="org-table">
+        <thead><tr>
+          <th></th>
+          <th>${T('orgColRepo')}</th>
+          <th>${T('orgColTools')}</th>
+          <th class="num">${T('orgColTokens')}</th>
+          <th class="num">${T('orgColStars')}</th>
+          <th class="num">${T('orgColDate')}</th>
+        </tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>
+    ${pagination}
+    `}
+    ${unconfiguredSection}
+    <div class="org-action-row">
+      <button class="org-compare-btn" onclick="orgAddSelectedToCompare()" ${selCount===0?'disabled':''}>
+        ⚖️ ${T('orgAddSelected')}${selCount>0?` (${selCount})`:''}
+      </button>
+      <button class="org-download-btn" onclick="downloadOrgReport()">⬇ ${T('orgDownloadReport')}</button>
+    </div>
+  </div>`;
+}
+function orgSetSort(key){
+  if(ORG_SCAN_STATE.sortBy===key){ORG_SCAN_STATE.sortDir*=-1;}else{ORG_SCAN_STATE.sortBy=key;ORG_SCAN_STATE.sortDir=-1;}
+  ORG_SCAN_STATE.page=0;
+  renderOrgResults();
+}
+function orgSetPage(pg){ORG_SCAN_STATE.page=pg;renderOrgResults()}
+function orgToggleSelect(fullName){
+  if(ORG_SCAN_STATE.selected.has(fullName))ORG_SCAN_STATE.selected.delete(fullName);
+  else ORG_SCAN_STATE.selected.add(fullName);
+  renderOrgResults();
+}
+function orgSelectPageToggle(){
+  const cfg=sortedOrgConfigured();
+  const pg=ORG_SCAN_STATE.page;const ps=ORG_SCAN_STATE.pageSize;
+  const pageRows=cfg.slice(pg*ps,(pg+1)*ps);
+  const allSelected=pageRows.every(r=>ORG_SCAN_STATE.selected.has(r.fullName));
+  pageRows.forEach(r=>{
+    if(allSelected)ORG_SCAN_STATE.selected.delete(r.fullName);
+    else ORG_SCAN_STATE.selected.add(r.fullName);
+  });
+  renderOrgResults();
+}
+function orgToggleUnconfigured(){ORG_SCAN_STATE.unconfiguredVisible=!ORG_SCAN_STATE.unconfiguredVisible;renderOrgResults()}
+function orgAddSelectedToCompare(){
+  const sel=ORG_SCAN_STATE.selected;
+  if(!sel.size)return;
+  let added=0;
+  ORG_SCAN_STATE.configured
+    .filter(r=>sel.has(r.fullName))
+    .forEach(r=>{
+      const ok=addCompareItem({type:'github-repo',key:r.fullName,owner:r.org,repo:r.name});
+      if(ok)added++;
+    });
+  if(added>0){
+    document.getElementById('cmp-results').classList.add('hidden');
+    setArea('compare');
+    setTimeout(()=>document.querySelector('#cmp-queue').scrollIntoView({behavior:'smooth',block:'center'}),100);
+    showCmpStatus(LANG==='pt'?`${added} repositório(s) adicionado(s) à comparação.`:`${added} repositor${added===1?'y':'ies'} added to comparison.`,'loading');
+    setTimeout(clearCmpStatus,3000);
+  }
+}
+function downloadOrgReport(){
+  const org=ORG_SCAN_STATE.org;
+  if(!org)return;
+  const payload={
+    kind:'agentlens-org-report',
+    schemaVersion:1,
+    generatedAt:new Date().toISOString(),
+    org,
+    totalScanned:ORG_SCAN_STATE.totalRepos,
+    configured:ORG_SCAN_STATE.configured.map(r=>({
+      fullName:r.fullName,name:r.name,description:r.description,
+      stars:r.stars,language:r.language,createdAt:r.createdAt,
+      totalContextTokens:r.totalContextTokens||0,
+      foundTools:Object.keys(r.foundByTool||{}),
+    })),
+    unconfigured:ORG_SCAN_STATE.unconfigured.map(r=>({
+      fullName:r.fullName,name:r.name,stars:r.stars,createdAt:r.createdAt,
+    })),
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`agentlens-org-${org}.json`;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},200);
+}
+const ORG_SCAN_BATCH_SIZE=10;
+const ORG_SCAN_BATCH_DELAY=600;
+async function scanOrg(org){
+  Object.assign(ORG_SCAN_STATE,{
+    org,ownerType:null,totalRepos:0,scannedCount:0,scanning:true,done:false,
+    repos:[],configured:[],unconfigured:[],
+    selected:new Set(),page:0,sortBy:'tokens',sortDir:-1,unconfiguredVisible:false,
+  });
+  const thisOrg=org;
+  showOrgPanel();
+  renderOrgProgress('fetching');
+  clearCmpStatus();
+  const result=await fetchOrgRepos(org);
+  if(ORG_SCAN_STATE.org!==thisOrg)return;
+  if(result.error){renderOrgError(result.error);return}
+  ORG_SCAN_STATE.ownerType=result.ownerType||'organization';
+  const allRepos=result.repos;
+  ORG_SCAN_STATE.totalRepos=allRepos.length;
+  renderOrgProgress('scanning');
+  for(let i=0;i<allRepos.length;i+=ORG_SCAN_BATCH_SIZE){
+    if(ORG_SCAN_STATE.org!==thisOrg)return;
+    const batch=allRepos.slice(i,i+ORG_SCAN_BATCH_SIZE);
+    await Promise.all(batch.map(async repo=>{
+      let scanData;
+      try{
+        scanData=await analyzeRepoData(repo.owner.login,repo.name);
+      }catch(e){
+        scanData={ok:false,error:'network'};
+      }
+      if(ORG_SCAN_STATE.org!==thisOrg)return;
+      const entry={
+        fullName:repo.full_name,
+        name:repo.name,
+        org:repo.owner.login,
+        description:repo.description||'',
+        stars:repo.stargazers_count||0,
+        forks:repo.forks_count||0,
+        language:repo.language||'',
+        createdAt:repo.created_at||'',
+        updatedAt:repo.updated_at||'',
+        ...scanData,
+      };
+      ORG_SCAN_STATE.repos.push(entry);
+      if(scanData.ok&&!scanData.noFiles){
+        ORG_SCAN_STATE.configured.push(entry);
+      }else{
+        ORG_SCAN_STATE.unconfigured.push(entry);
+      }
+      ORG_SCAN_STATE.scannedCount++;
+    }));
+    renderOrgProgress('scanning');
+    if(i+ORG_SCAN_BATCH_SIZE<allRepos.length){
+      await new Promise(res=>setTimeout(res,ORG_SCAN_BATCH_DELAY));
+    }
+  }
+  if(ORG_SCAN_STATE.org!==thisOrg)return;
+  ORG_SCAN_STATE.scanning=false;
+  ORG_SCAN_STATE.done=true;
+  renderOrgResults();
+}
+
+function compareItemId(item){
+  return item.type==='github-repo'?`gh:${item.key}`:`report:${item.file}:${item.repoId}`;
+}
+function addCompareItem(item,{silent=false}={}){
+  const id=compareItemId(item);
+  if(COMPARE_STATE.items.find(x=>compareItemId(x)===id))return false;
+  if(COMPARE_STATE.items.length>=20){
+    if(!silent)showCmpStatus(T('compareMax'),'warn');
+    return false;
+  }
+  COMPARE_STATE.items.push(item);
+  renderCmpQueue();
+  return true;
+}
+function addToCompare(){
+  const url=document.getElementById('cmp-url').value.trim();
+  if(!url)return;
+  const org=parseOrgUrl(url);
+  if(org){
+    document.getElementById('cmp-url').value='';
+    document.getElementById('org-area-url').value=url;
+    setArea('org');
+    scanOrg(org.org);
+    return;
+  }
+  const parsed=parseRepoUrl(url);
+  if(!parsed){showCmpStatus(T('invalidGithubUrl'),'error');return}
+  addCompareItem({type:'github-repo',key:`${parsed.owner}/${parsed.repo}`,owner:parsed.owner,repo:parsed.repo});
+  document.getElementById('cmp-url').value='';
+}
+function addOrgFromArea(){
+  const url=document.getElementById('org-area-url').value.trim();
+  if(!url)return;
+  const org=parseOrgUrl(url);
+  if(!org){
+    const panel=document.getElementById('org-scan-panel');
+    panel.classList.remove('hidden');
+    panel.innerHTML=`<div class="status-card error">❌ <span>${T('invalidGithubUrl')}</span></div>`;
+    return;
+  }
+  scanOrg(org.org);
+}
+function removeFromCompare(id){
+  COMPARE_STATE.items=COMPARE_STATE.items.filter(item=>compareItemId(item)!==id);
+  renderCmpQueue();
+}
+function removeFromCompareAt(index){
+  COMPARE_STATE.items.splice(index,1);
+  renderCmpQueue();
+}
+function renderCmpQueue(){
+  const el=document.getElementById('cmp-queue');
+  el.innerHTML=COMPARE_STATE.items.map((item,index)=>{
+    const resolved=resolveCompareItem(item);
+    const title=item.type==='github-repo'
+      ? item.key
+      : (resolved.ok&&resolved.repo?resolved.repo.repoName:`${item.file}#${item.repoId}`);
+    const meta=item.type==='github-repo'
+      ? T('compareGithubLabel')
+      : resolved.ok
+        ? `${T('compareLocalLabel')} · ${item.file}`
+        : `${T('localUnresolved')} · ${item.file}`;
+    return `<div class="compare-repo-chip ${resolved.ok?'':'unresolved'}">
+      <div class="crep-name-wrap">
+        <span class="crep-name">${esc(title)}</span>
+        <span class="crep-meta">${esc(meta)}</span>
+      </div>
+      <button class="remove-chip" onclick="removeFromCompareAt(${index})" title="Remove">✕</button>
+    </div>`;
+  }).join('');
+  document.getElementById('cmp-run-btn').disabled=COMPARE_STATE.items.length<2;
+}
+function addExampleToCompare(url){
+  const parsed=parseRepoUrl(url);
+  if(parsed)addCompareItem({ type:'github-repo', key:`${parsed.owner}/${parsed.repo}`, owner:parsed.owner, repo:parsed.repo });
+}
+// ── Saved Comparisons (in Compare tab) ──
+function renderSavedComparisons(){
+  const el=document.getElementById('cmp-saved-list');
+  if(!el)return;
+  el.innerHTML=LOCAL_STATE.comparisons.length?LOCAL_STATE.comparisons.map((entry,index)=>`<div class="library-item">
+      <div class="library-file">${esc(entry.fileName)}</div>
+      <div class="library-meta">${reportSourceLabel(entry.source)} · ${entry.comparison.items.length} item(s)</div>
+      <div class="library-actions">
+        <button onclick="loadSavedComparison(${index})">${T('comparisonLoad')}</button>
+      </div>
+    </div>`).join(''):`<div class="library-empty">${T('workspaceNoComparisons')}</div>`;
+}
+function loadComparisonDocument(comparison){
+  if(comparison.embeddedReports){
+    Object.entries(comparison.embeddedReports).forEach(([fileName,reportData])=>{
+      const report=normalizeReportDoc(reportData,fileName);
+      if(report)registerReportDoc(report,'import');
+    });
+    renderLocalWorkspace();
+  }
+  COMPARE_STATE.items=comparison.items.slice();
+  document.getElementById('cmp-sel-model').value=comparison.settings.modelId||'claude-sonnet-4.6';
+  document.getElementById('cmp-sl-devs').value=comparison.settings.devs||5;
+  document.getElementById('cmp-sl-chats').value=comparison.settings.chats||15;
+  document.getElementById('cmp-results').classList.add('hidden');
+  COMPARE_STATE.results=[];
+  renderCmpQueue();
+  setArea('compare');
+  showCmpStatus(T('comparisonLoaded'),'loading');
+}
+async function saveComparisonText(fileName, text){
+  if(window.showSaveFilePicker){
+    try{
+      const handle=await window.showSaveFilePicker({
+        suggestedName:fileName,
+        types:[{ description:'JSON', accept:{ 'application/json':['.json'] } }],
+      });
+      const writable=await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      showCmpStatus(T('comparisonExported'),'loading');
+      return;
+    }catch(err){
+      if(err&&err.name==='AbortError')return;
+    }
+  }
+  const blob=new Blob([text],{ type:'application/json' });
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showCmpStatus(T('comparisonExported'),'loading');
+}
+async function exportComparison(){
+  if(!COMPARE_STATE.items.length){
+    showCmpStatus(T('compareNeedTwo'),'warn');
+    return;
+  }
+  const embeddedReports={};
+  COMPARE_STATE.items.forEach(item=>{
+    if(item.type==='report-repo'){
+      const entry=findReportEntry(item.file);
+      if(entry&&!embeddedReports[entry.fileName])embeddedReports[entry.fileName]=entry.report;
+    }
+  });
+  const payload={
+    kind:'agentlens-comparison',
+    schemaVersion:1,
+    generatedAt:new Date().toISOString(),
+    title:'AgentLens Comparison',
+    settings:{
+      modelId:document.getElementById('cmp-sel-model').value,
+      devs:+document.getElementById('cmp-sl-devs').value,
+      chats:+document.getElementById('cmp-sl-chats').value,
+    },
+    embeddedReports:Object.keys(embeddedReports).length?embeddedReports:undefined,
+    items:COMPARE_STATE.items.map(item=>item.type==='github-repo'
+      ? { type:'github-repo', key:item.key }
+      : { type:'report-repo', file:item.file, repoId:item.repoId }),
+  };
+  registerComparisonDoc(normalizeComparisonDoc(payload, 'agentlens-comparison.json'), 'import');
+  await saveComparisonText('agentlens-comparison.json', JSON.stringify(payload, null, 2) + '\n');
+}
+async function runCompare(){
+  if(COMPARE_STATE.items.length<2){
+    showCmpStatus(T('compareNeedTwo'),'warn');
+    return;
+  }
+  const btn=document.getElementById('cmp-run-btn');
+  btn.disabled=true;document.getElementById('cmp-run-icon').textContent='⏳';
+  document.getElementById('cmp-results').classList.add('hidden');
+  COMPARE_STATE.results=[];
+
+  for(let i=0;i<COMPARE_STATE.items.length;i++){
+    const item=COMPARE_STATE.items[i];
+    const label=item.type==='github-repo'?item.key:`${item.file}#${item.repoId}`;
+    showCmpStatus(`<div class="cmp-progress"><div class="spinner"></div><span>${T('cmpScanning')} <strong class="cmp-scanning">${esc(label)}</strong> (${i+1}/${COMPARE_STATE.items.length})…</span></div>`,'loading');
+    if(item.type==='github-repo'){
+      const data=await analyzeRepoData(item.owner,item.repo);
+      COMPARE_STATE.results.push({ item, source:'github', key:item.key, ...data });
+      continue;
+    }
+    const resolved=resolveCompareItem(item);
+    if(!resolved.ok){
+      COMPARE_STATE.results.push({ item, source:'local', ok:false, error:resolved.error });
+      continue;
+    }
+    COMPARE_STATE.results.push({ item, source:'local', key:resolved.repo.repoName, ok:true, ...resolved.repo });
+  }
+
+  clearCmpStatus();
+  renderCompareResults();
+  btn.disabled=COMPARE_STATE.items.length<2;
+  document.getElementById('cmp-run-icon').textContent='⚖️';
+  document.getElementById('cmp-results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function openCompareResult(index){
+  const r=COMPARE_STATE.results[index];
+  if(!r||!r.ok)return;
+  const repoLabel=r.source==='github'?r.key:(r.repoName||r.key||`${r.item&&r.item.file||'repo'}`);
+  const branchLabel=r.branch||repoLabel;
+  const foundByTool=r.foundByTool||{};
+  const uniqueRefs=(r.uniqueRefs||[]).map(normalizeRef);
+  STATE.analyzed=true;
+  STATE.foundByTool=foundByTool;
+  STATE.uniqueRefs=uniqueRefs;
+  STATE.totalContextTokens=Number(r.totalContextTokens)||calcMaxToolViewTokens(foundByTool,uniqueRefs);
+  document.getElementById('repo-url').value=r.source==='github'&&r.key?`https://github.com/${r.key}`:repoLabel;
+  clearStatus();
+  renderDetection(foundByTool,uniqueRefs,branchLabel);
+  renderDetectionExtras(repoLabel,foundByTool,STATE.totalContextTokens);
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  recalcCost();
+  setArea('analyze');
+  document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function renderCompareResults(){
+  const results=COMPARE_STATE.results;
+  if(!results.length)return;
+
+  const modelId=document.getElementById('cmp-sel-model').value;
+  const m=PRICING[modelId];
+  const devs=+document.getElementById('cmp-sl-devs').value;
+  const chats=+document.getElementById('cmp-sl-chats').value;
+  document.getElementById('cmp-val-devs').textContent=devs;
+  document.getElementById('cmp-val-chats').textContent=chats;
+  const isBRL=document.getElementById('chk-brl').checked;
+
+  function costFor(tok){
+    const cached=Math.round(tok*0.7);const uncached=tok-cached;
+    const ic=(uncached/1e6)*m.input;const cc=(cached/1e6)*(m.cacheRead||0);
+    const cw=m.cacheWrite?(cached/1e6)*m.cacheWrite*0.05:0;
+    const oc=(2000/1e6)*m.output;
+    return ic+cc+cw+oc;
+  }
+
+  // Horizontal bar chart
+  if(COMPARE_STATE.chart)COMPARE_STATE.chart.destroy();
+  COMPARE_STATE.chart=new Chart(document.getElementById('chart-compare'),{
+    type:'bar',
+    data:{
+      labels:results.map(r=>r.source==='github'?r.key.split('/').pop():(r.ok?(r.repoName||r.key):'missing')),
+      datasets:[{
+        label:'tokens',
+        data:results.map(r=>r.totalContextTokens||0),
+        backgroundColor:results.map(r=>{const t=r.totalContextTokens||0;return t<5000?'#16a34a':t<10000?'#d97706':t<20000?'#ea580c':'#dc2626'}),
+        borderRadius:8,borderSkipped:false
+      }]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtTok(ctx.parsed.x)+' tokens'}}},
+      scales:{x:{grid:{color:THEME==='dark'?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)'},ticks:{color:'#64748b',callback:v=>fmtTok(v)}},y:{grid:{display:false},ticks:{color:'#64748b'}}}
+    }
+  });
+
+  // Table
+  const colLabels=[T('cmpColRepo'),T('cmpColTools'),T('cmpColTokens'),T('thReq'),T('thDay'),T('thMonth'),T('thYear'),T('cmpColAction')];
+  const hdr=`<thead><tr>${colLabels.map((h,i)=>`<th class="${i>1?'num':''}">${h}</th>`).join('')}</tr></thead>`;
+
+  const rows=results.map((r,i)=>{
+    if(!r.ok){
+      const errMsg=r.source==='local'
+        ? T('compareMissingFile')
+        : ({private:T('cmpErrPrivate'),network:T('cmpErrNetwork'),notfound:T('cmpErrNotFound')}[r.error]||r.error);
+      const label=r.source==='github'
+        ? `<a href="https://github.com/${r.key}" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none">${r.key}</a>`
+        : `<span style="font-weight:700;color:var(--g900)">${esc(r.item.file)}#${esc(r.item.repoId)}</span>`;
+      return`<tr><td>${label}</td><td colspan="7" style="color:var(--red);font-size:.82rem">⚠ ${esc(errMsg)}</td></tr>`;
+    }
+    const tok=r.totalContextTokens||0;
+    const pr=costFor(tok);const pd=pr*devs*chats;const pm=pd*22;const py=pm*12;
+    const hc=tok<5000?'#16a34a':tok<10000?'#d97706':tok<20000?'#ea580c':'#dc2626';
+    const foundToolIds=Object.keys(r.foundByTool||{});
+    const pills=foundToolIds.map(tid=>{const t=AGENT_TOOLS.find(x=>x.id===tid);return t?`<span style="background:${t.color}22;color:${t.color};border-radius:99px;padding:1px 7px;font-size:.67rem;font-weight:700;display:inline-block;margin:1px">${t.icon} ${t.name}</span>`:''}).join('');
+    const label=r.source==='github'
+      ? `<a href="https://github.com/${r.key}" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none">${r.key}</a>`
+      : `<span style="color:var(--g900);font-weight:700">${esc(r.repoName||r.key)}</span><br><span style="font-size:.72rem;color:var(--g400)">${esc(r.item.file)}</span>`;
+    return`<tr>
+      <td>${label}${r.noFiles?`<br><span style="font-size:.72rem;color:var(--g400)">${T('cmpNoConfigs')}</span>`:''}</td>
+      <td>${pills||`<span style="color:var(--g400);font-size:.8rem">—</span>`}</td>
+      <td class="num"><span style="color:${hc};font-weight:800">${fmtTok(tok)}</span></td>
+      <td class="num">${fmt(pr)}</td>
+      <td class="num">${fmt(pd)}</td>
+      <td class="num">${fmt(pm)}</td>
+      <td class="num">${fmt(py)}</td>
+      <td class="num"><button class="action-btn" style="padding:6px 10px;font-size:.75rem" onclick="openCompareResult(${i})">${T('cmpOpenAnalysis')}</button></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('cmp-result-table').innerHTML=hdr+'<tbody>'+rows+'</tbody>';
+  document.getElementById('cmp-results').classList.remove('hidden');
+  renderScatterPlot(results);
+}
+
+function showCmpStatus(m,t='loading'){
+  document.getElementById('cmp-status-area').innerHTML=`<div class="status-card ${t}">${m}</div>`;
+}
+function clearCmpStatus(){document.getElementById('cmp-status-area').innerHTML=''}
+
+const HEAVY_REF_THRESHOLD = 10000;
+
+function renderHeavyWarnPanel(ref) {
+  const pct = Math.round(ref.tokens / 2000);
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fix = (title, desc, code) =>
+    `<div class="heavy-fix"><div class="heavy-fix-title">${title}</div><div class="heavy-fix-desc">${desc}</div>${code ? `<pre class="heavy-fix-code">${esc(code)}</pre>` : ''}</div>`;
+  return `<div class="heavy-warn-panel">
+    <div class="heavy-warn-intro"><span>${T('heavyRefIntro')(fmtTok(ref.tokens), pct)}</span></div>
+    <div class="heavy-fixes">
+      ${fix(T('heavyFixRemoveTitle'), T('heavyFixRemoveDesc'), null)}
+      ${fix(T('heavyFixClaudeTitle'), T('heavyFixClaudeDesc'), T('heavyFixClaudeCode'))}
+      ${fix(T('heavyFixSummaryTitle'), T('heavyFixSummaryDesc'), null)}
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════
+// RENDER DETECTION
+// ══════════════════════════════════════
+function renderDetection(foundByTool,uniqueRefs,branch){
+  const foundToolIds=Object.keys(foundByTool);
+  const foundTools=AGENT_TOOLS.filter(t=>foundToolIds.includes(t.id));
+  const agentTok=foundTools.reduce((s,t)=>s+estimateTokens(foundByTool[t.id].content),0);
+  const foundRefs=uniqueRefs.filter(r=>r.found);
+  const sharedRefs=uniqueRefs.filter(r=>r.found&&r.fromTools.size>1);
+  const allContextTok=calcAllContextTokens(foundByTool,uniqueRefs);
+  const maxViewTok=calcMaxToolViewTokens(foundByTool,uniqueRefs);
+  const nonSimulGap=Math.max(0,allContextTok-maxViewTok);
+
+  // Stats
+  document.getElementById('stats-bar').innerHTML=`
+    <div class="stat-card green"><div class="stat-num">${foundTools.length}</div><div class="stat-label">${T('tools')}</div></div>
+    <div class="stat-card blue"><div class="stat-num">${fmtTok(agentTok)}</div><div class="stat-label">${T('configTokens')}</div></div>
+    <div class="stat-card purple"><div class="stat-num">${uniqueRefs.length}</div><div class="stat-label">${T('refs')}</div></div>
+    <div class="stat-card orange"><div class="stat-num">${fmtTok(maxViewTok)}</div><div class="stat-label">${T('totalContext')}</div></div>
+    ${sharedRefs.length?`<div class="stat-card teal"><div class="stat-num">${sharedRefs.length}</div><div class="stat-label">${T('shared')}</div></div>`:''}
+    ${nonSimulGap>0?`<div class="stat-card pink"><div class="stat-num">−${fmtTok(nonSimulGap)}</div><div class="stat-label">${T('dedupSaved')}</div></div>`:''}`;
+
+  // Savings banner
+  const ban=document.getElementById('savings-banner');
+  if(nonSimulGap>0){ban.classList.remove('hidden');ban.innerHTML=`<div class="s-icon">♻️</div><div class="s-body"><div class="s-title">${T('dedupTitle')}</div><div class="s-detail">${T('dedupDetail')(foundTools.length,fmtTok(allContextTok),fmtTok(maxViewTok))}</div></div><div class="s-num">−${fmtTok(nonSimulGap)} tok</div>`}else ban.classList.add('hidden');
+
+  // Tool grid
+  document.getElementById('tools-found-pill').textContent=`${foundTools.length} / ${AGENT_TOOLS.length}`;
+  document.getElementById('tool-grid').innerHTML=AGENT_TOOLS.map(t=>{const f=!!foundByTool[t.id];const tk=f?estimateTokens(foundByTool[t.id].content):0;return`<div class="tool-card ${f?'found':'missing'}"><div class="tool-icon">${t.icon}</div><div class="tool-info"><div class="tool-name">${t.name}</div><div class="tool-file">${f?foundByTool[t.id].path:t.files[0]}</div>${f?`<div style="font-size:.72rem;color:var(--green);font-weight:700;margin-top:1px">~${fmtTok(tk)} ${T('tokens')}</div>`:''}</div>${f?'<div class="found-dot"></div>':'<div class="miss-dot"></div>'}</div>`}).join('');
+
+  // Context tree
+  const treeItems=[];
+  for(const tool of foundTools){const{path,content}=foundByTool[tool.id];const tk=estimateTokens(content);
+    treeItems.push(`<div class="tree-item"><span style="font-size:1.1rem">${tool.icon}</span><span class="t-path root">${path}</span><div class="t-right"><span class="t-tool" ${toolPill(tool.id)}>${tool.name}</span><span class="t-tok">~${fmtTok(tk)} tok</span></div></div>`);
+    const toolRefs=uniqueRefs.filter(r=>r.fromTools.has(tool.id));
+    for(const ref of toolRefs){const isShared=ref.fromTools.size>1;const first=[...ref.fromTools][0];const isDup=isShared&&first!==tool.id;
+      const icon=!ref.found?'❓':/\.md/.test(ref.path)?'📄':/\.json/.test(ref.path)?'📋':/\.(ts|js|py|go|rs|rb)$/.test(ref.path)?'🟨':'📁';
+      treeItems.push(`<div class="tree-item" style="padding-left:18px"><span style="color:var(--g400);margin-right:3px">└─</span><span style="font-size:.9rem">${icon}</span><span class="${isDup?'t-path dedup':'t-path'}" style="${!ref.found?'color:var(--red)':''}">${ref.path}</span><div class="t-right">${isShared?`<span class="t-tool" style="background:#0d948822;color:var(--teal);border-radius:99px;padding:1px 7px;font-size:.67rem;font-weight:700">${isDup?T('already'):T('shared')}</span>`:''}<span class="t-tok">${!ref.found?T('missing'):isDup?'':('~'+fmtTok(ref.tokens)+' tok')}</span></div></div>`)}}
+  document.getElementById('context-tree').innerHTML=treeItems.join('');
+  document.getElementById('tree-count-pill').textContent=`${foundTools.length} + ${uniqueRefs.length} ${T('files')}`;
+
+  // Agent file viewers
+  document.getElementById('agent-files-pill').textContent=`${foundTools.length} ${T('found')}`;
+  document.getElementById('agent-files-list').innerHTML=foundTools.map((tool,i)=>{const{path,content}=foundByTool[tool.id];const tk=estimateTokens(content);const bid=`ab-${i}`,rid=`ar-${i}`,wid=`aw-${i}`;
+    FILE_CONTENTS[bid]=content;
+    const hasKey=hasApiKey();
+    const tBtn=hasKey?`<button class="icon-btn" onclick="event.stopPropagation();toggleTranslatePanel('${bid}')" title="${T('translateBtn')}">🌐</button>`:'';
+    const tPanel=hasKey?`<div class="translate-panel" id="tp-${bid}"><div class="translate-controls"><select id="td-${bid}"><option value="en">PT → EN</option><option value="pt">EN → PT</option></select><button class="t-run-btn" onclick="runTranslate('${bid}')">${T('translateBtn')}</button><button class="t-close-btn" onclick="toggleTranslatePanel('${bid}')">✕</button></div><div class="translate-result" id="tr-${bid}"></div><div class="translate-status" id="ts-${bid}"></div></div>`:'';
+    const isMd=true;
+    return`<div class="agent-file-block" id="${bid}"><div class="agent-file-header" onclick="toggleAgentFile(this)"><div class="agent-file-title"><span style="font-size:1.2rem">${tool.icon}</span><span class="file-badge">${path}</span><span style="color:var(--g500);font-size:.8rem">${tool.name}</span></div><div style="display:flex;align-items:center;gap:7px"><span class="token-badge">~${fmtTok(tk)} tok</span>${tBtn}<button class="icon-btn copy-btn" onclick="event.stopPropagation();copyBlock('${bid}')" title="${T('fsCopy')}">📋</button><button class="icon-btn" onclick="event.stopPropagation();openFullscreen('${bid}','${tool.icon}','${path}',${isMd})" title="${T('fsExpand')}">⛶</button><span style="color:var(--g400)">▾</span></div></div>${tPanel}<div class="agent-file-body"><div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this,'${rid}','${bid}')">${T('rendered')}</button><button class="tab-btn" onclick="switchTab(this,'${wid}','${bid}')">${T('raw')}</button></div><div class="tab-content active" id="${rid}"><div class="md-body">${renderMd(content)}</div></div><div class="tab-content" id="${wid}"><div class="raw-code">${content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div></div></div></div>`}).join('');
+
+  // Refs
+  const missingRefs=uniqueRefs.filter(r=>!r.found);
+  document.getElementById('refs-count-pill').textContent=`${foundRefs.length} ${T('resolved')} · ${missingRefs.length} ${T('missing')}`;
+  if(!uniqueRefs.length){document.getElementById('refs-grid').innerHTML=`<div class="empty-state" style="padding:36px;background:var(--card);border:1px solid var(--card-border);border-radius:12px"><div class="icon">🔍</div><h3>${T('noRefs')}</h3><p>${T('noRefsP')}</p></div>`;return}
+  document.getElementById('refs-grid').innerHTML=uniqueRefs.map((ref,ri)=>{const isShared=ref.fromTools.size>1;const rfid=`rc-${ri}`;
+    if(ref.found&&ref.content)FILE_CONTENTS[rfid]=ref.content;
+    const hasKey=hasApiKey();
+    const isHeavy=ref.found&&ref.tokens>=HEAVY_REF_THRESHOLD;
+    const tags=[ref.found?`<span class="ref-tag found">✓</span>`:`<span class="ref-tag missing">✗</span>`,`<span class="ref-tag type">${ref.type}</span>`,isShared?`<span class="ref-tag shared">${T('shared')} ×${ref.fromTools.size}</span>`:'',isHeavy?`<span class="ref-tag heavy">${T('heavyRefBadge')}</span>`:'',ref.found?`<span class="token-badge">~${fmtTok(ref.tokens)} tok</span>`:'',...[...ref.fromTools].map(tid=>{const tt=AGENT_TOOLS.find(x=>x.id===tid);return tt?`<span class="t-tool" ${toolPill(tid)}>${tt.icon}</span>`:''})].join('');
+    const cnt=ref.found?(/\.(md|mdx)$/.test(ref.path)?`<div class="md-body">${renderMd(ref.content)}</div>`:`<div class="raw-code">${ref.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`):`<p style="color:var(--red);font-style:italic;padding:6px 0">${T('missing')} (${branch})</p>`;
+    const refIcon=/\.md$/.test(ref.path)?'📄':/\.json$/.test(ref.path)?'📋':/\.(ts|js|py|go|rs|rb)$/.test(ref.path)?'🟨':'📁';
+    const refIsMd=/\.(md|mdx)$/.test(ref.path);
+    const copyBtn=ref.found?`<button class="icon-btn copy-btn" onclick="event.stopPropagation();copyBlock('${rfid}')" title="${T('fsCopy')}">📋</button>`:'';
+    const fsBtn=ref.found?`<button class="icon-btn" onclick="event.stopPropagation();openFullscreen('${rfid}','${refIcon}','${ref.path}',${refIsMd})" title="${T('fsExpand')}">⛶</button>`:'';
+    const tBtn=hasKey&&ref.found?`<button class="icon-btn" onclick="event.stopPropagation();toggleTranslatePanel('${rfid}')" title="${T('translateBtn')}">🌐</button>`:'';
+    const tPanel=hasKey&&ref.found?`<div class="translate-panel" id="tp-${rfid}"><div class="translate-controls"><select id="td-${rfid}"><option value="en">PT → EN</option><option value="pt">EN → PT</option></select><button class="t-run-btn" onclick="runTranslate('${rfid}')">${T('translateBtn')}</button><button class="t-close-btn" onclick="toggleTranslatePanel('${rfid}')">✕</button></div><div class="translate-result" id="tr-${rfid}"></div><div class="translate-status" id="ts-${rfid}"></div></div>`:'';
+    const heavyPanel=isHeavy?renderHeavyWarnPanel(ref):'';
+    return`<div class="ref-card ${!ref.found?'not-found':''} ${isHeavy?'heavy':''}" id="${rfid}"><div class="ref-card-header" onclick="toggleRef(this)"><span class="ref-path">${ref.path}</span><div class="ref-meta">${tags}${copyBtn}${fsBtn}${tBtn}<span style="color:var(--g400)">▾</span></div></div>${tPanel}${heavyPanel}<div class="ref-content">${cnt}</div></div>`}).join('');
+
+  // Render Context Health
+  renderHealth(foundByTool, uniqueRefs);
+}
+
+function renderDetectionExtras(repoName, foundByTool, totalTok){
+  renderResultHeader(repoName, totalTok, foundByTool);
+  renderCoverageMatrix(repoName, foundByTool);
+}
+
+// ══════════════════════════════════════
+// NEW UI COMPONENTS
+// ══════════════════════════════════════
+function renderResultHeader(repoName, totalTok, foundByTool){
+  const el=document.getElementById('result-header');
+  const foundCount=Object.keys(foundByTool||{}).length;
+  const totalIdeal=8000,totalWarn=20000;
+  let badgeClass='ok',badgeLabel='OK';
+  if(totalTok>totalWarn){badgeClass='max';badgeLabel='MAX';}
+  else if(totalTok>totalIdeal){badgeClass='warn';badgeLabel='WARN';}
+  el.innerHTML=`
+    <div class="rh-top">
+      <div class="rh-title">
+        <div class="rh-name">${esc(repoName||'Repository')}</div>
+        <span class="health-badge ${badgeClass}">${badgeLabel}</span>
+      </div>
+      <div class="rh-support">${foundCount} / ${AGENT_TOOLS.length} ${T('tools')}</div>
+    </div>
+    <div class="rh-bottom">
+      <div class="rh-kpi">
+        <div class="rh-kpi-label">${T('totalContext')}</div>
+        <div class="rh-tokens">${fmtTok(totalTok)} ${T('tokens')}</div>
+      </div>
+      <div class="rh-actions">
+        <button class="action-btn" onclick="addCurrentAnalyzedToCompare()" title="${T('reportCompare')}">➕ ${T('reportCompare')}</button>
+        <button class="action-btn" onclick="exportCurrentAnalysis()" title="${T('exportJson')||'Export JSON'}">💾 ${T('exportJson')||'Export JSON'}</button>
+      </div>
+    </div>`;
+  el.classList.remove('hidden');
+}
+
+function renderCoverageMatrix(repoName, foundByTool){
+  const el=document.getElementById('coverage-matrix');
+  const headerCells=AGENT_TOOLS.map(t=>`<th title="${t.name}">${t.icon}<br><span style="font-size:.65rem">${t.name.split(' ')[0]}</span></th>`).join('');
+  const cells=AGENT_TOOLS.map(t=>{
+    const found=!!(foundByTool&&foundByTool[t.id]);
+    const color=found?t.color:'var(--g400)';
+    return`<td title="${t.name}: ${found?T('found'):T('missing')}"><span class="coverage-dot" style="background:${color};box-shadow:${found?`0 0 6px ${color}`:''};opacity:${found?1:0.3}"></span></td>`;
+  }).join('');
+  el.innerHTML=`<div class="coverage-matrix-title">${T('coverageMatrixTitle')}</div>
+    <table class="coverage-table">
+      <thead><tr><th>${esc(repoName||'')}</th>${headerCells}</tr></thead>
+      <tbody><tr><td>${esc(repoName||'')}</td>${cells}</tr></tbody>
+    </table>`;
+  el.classList.remove('hidden');
+}
+
+let _scatterChart=null;
+function renderScatterPlot(results){
+  const el=document.getElementById('scatter-section');
+  const canvas=document.getElementById('chart-compare-scatter');
+  if(!results||!results.length){el.style.display='none';return;}
+
+  const modelId=document.getElementById('cmp-sel-model').value;
+  const m=PRICING[modelId];
+  const devs=+document.getElementById('cmp-sl-devs').value;
+  const chats=+document.getElementById('cmp-sl-chats').value;
+
+  function costFor(tok){
+    const cached=Math.round(tok*0.7);const uncached=tok-cached;
+    const ic=(uncached/1e6)*m.input;const cc=(cached/1e6)*(m.cacheRead||0);
+    const cw=m.cacheWrite?(cached/1e6)*m.cacheWrite*0.05:0;
+    const oc=(2000/1e6)*m.output;
+    return(ic+cc+cw+oc)*devs*chats*22;
+  }
+
+  const validResults=results.filter(r=>r.ok&&!r.noFiles);
+  if(validResults.length<2){el.style.display='none';return;}
+
+  const pts=validResults.map(r=>({
+    x:r.totalContextTokens||0,
+    y:+costFor(r.totalContextTokens||0).toFixed(2),
+    label:r.source==='github'?(r.key||'').split('/').pop():(r.repoName||r.key||''),
+  }));
+
+  if(_scatterChart)_scatterChart.destroy();
+  _scatterChart=new Chart(canvas,{
+    type:'scatter',
+    data:{datasets:[{
+      label:'repos',
+      data:pts,
+      backgroundColor:pts.map((_,i)=>`hsl(${(i*47)%360},65%,55%)`),
+      pointRadius:8,pointHoverRadius:11,
+    }]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{
+          label:ctx=>{const p=ctx.raw;return[p.label,`${fmtTok(p.x)} tokens`,`${fmt(p.y)}/month`];}
+        }}
+      },
+      scales:{
+        x:{title:{display:true,text:'Tokens',color:'#64748b'},ticks:{color:'#64748b',callback:v=>fmtTok(v)},grid:{color:THEME==='dark'?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)'}},
+        y:{title:{display:true,text:'Cost/month',color:'#64748b'},ticks:{color:'#64748b',callback:v=>fmt(v)},grid:{color:THEME==='dark'?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)'}},
+      }
+    }
+  });
+  el.style.display='';
+}
+
+function renderHistoricalSnapshots(){
+  const timelineEl=document.getElementById('snapshots-timeline');
+  const grouped=new Map();
+  LOCAL_STATE.reports.forEach(entry=>{
+    entry.report.repos.forEach(repo=>{
+      const key=repo.repoName||repo.repoId;
+      if(!grouped.has(key))grouped.set(key,[]);
+      grouped.get(key).push({entry,repo});
+    });
+  });
+  const multiSnap=[...grouped.values()].filter(arr=>arr.length>1);
+  if(!multiSnap.length){timelineEl.classList.add('hidden');return;}
+  const rows=multiSnap.flatMap(arr=>{
+    const sorted=[...arr].sort((a,b)=>new Date(a.entry.report.generatedAt||0)-new Date(b.entry.report.generatedAt||0));
+    return sorted.map((item,i)=>{
+      const prev=sorted[i-1];
+      const delta=prev?item.repo.totalContextTokens-(prev.repo.totalContextTokens||0):null;
+      const dateStr=item.entry.report.generatedAt?new Date(item.entry.report.generatedAt).toLocaleString():'—';
+      const deltaHtml=delta===null?''
+        :delta>0?`<span class="snapshot-delta up">+${fmtTok(delta)}</span>`
+        :delta<0?`<span class="snapshot-delta down">${fmtTok(delta)}</span>`
+        :`<span class="snapshot-delta same">±0</span>`;
+      return`<div class="snapshot-row">
+        <span class="snapshot-date">${esc(dateStr)}</span>
+        <span class="snapshot-repo">${esc(item.repo.repoName||item.repo.repoId)}</span>
+        <span class="snapshot-tok">${fmtTok(item.repo.totalContextTokens||0)}</span>
+        ${deltaHtml}
+      </div>`;
+    });
+  }).join('');
+  timelineEl.innerHTML=`<div class="snapshot-timeline"><div class="snapshot-timeline-title">${T('historicalSnapshots')}</div>${rows}</div>`;
+  timelineEl.classList.remove('hidden');
+}
+
+function applyScenario(devs,chats,cardEl){
+  document.getElementById('sl-devs').value=devs;
+  document.getElementById('sl-chats').value=chats;
+  document.querySelectorAll('.scenario-card').forEach(c=>c.classList.remove('active'));
+  if(cardEl)cardEl.classList.add('active');
+  recalcCost();
+}
+
+function addCurrentAnalyzedToCompare(){
+  const url=document.getElementById('repo-url').value.trim();
+  const parsed=parseRepoUrl(url);
+  if(parsed){
+    addCompareItem({type:'github-repo',key:`${parsed.owner}/${parsed.repo}`,owner:parsed.owner,repo:parsed.repo});
+    setArea('compare');
+  }
+}
+
+function exportCurrentAnalysis(){
+  if(!STATE.analyzed)return;
+  const repoName=document.getElementById('repo-url').value.trim().split('/').pop()||'repo';
+  const payload={
+    kind:'agentlens-report',schemaVersion:1,
+    generatedAt:new Date().toISOString(),
+    repos:[{
+      repoName,
+      foundByTool:STATE.foundByTool,
+      uniqueRefs:STATE.uniqueRefs.map(r=>({...r,fromTools:[...r.fromTools]})),
+      agentTok:Object.values(STATE.foundByTool).reduce((s,f)=>s+estimateTokens(f.content),0),
+      refTok:calcRefTok(STATE.uniqueRefs),
+      viewTokensByTool:calcToolViewTokens(STATE.foundByTool,STATE.uniqueRefs),
+      allContextTokens:calcAllContextTokens(STATE.foundByTool,STATE.uniqueRefs),
+      totalContextTokens:STATE.totalContextTokens,
+    }],
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`agentlens-${repoName}.json`;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+// ══════════════════════════════════════
+// CONTEXT HEALTH
+// Provider limits & ideal baselines
+// ══════════════════════════════════════
+const HEALTH_LIMITS = {
+  codex:   { ideal:3000, warn:6000,  max:8000,  note:'healthCodexWarn' },
+  claude:  { ideal:2000, warn:5000,  max:20000, note:'healthClaudeWarn' },
+  cursor:  { ideal:2000, warn:5000,  max:10000, note:null },
+  copilot: { ideal:1500, warn:3000,  max:5000,  note:'healthCopilotWarn' },
+  windsurf:{ ideal:2000, warn:5000,  max:10000, note:null },
+  aider:   { ideal:2000, warn:5000,  max:10000, note:null },
+  devin:   { ideal:2000, warn:5000,  max:10000, note:null },
+};
+
+function healthGrade(tokens, limit) {
+  const ratio = tokens / limit.warn;
+  if (ratio <= 0.5) return { label: 'healthLean', color: 'var(--green)', bg: 'var(--green-l)', pct: Math.min(100, (tokens / limit.max) * 100) };
+  if (ratio <= 1.0) return { label: 'healthModerate', color: 'var(--yellow)', bg: 'var(--yellow-l)', pct: Math.min(100, (tokens / limit.max) * 100) };
+  if (ratio <= 1.6) return { label: 'healthHeavy', color: 'var(--orange)', bg: 'var(--orange-l)', pct: Math.min(100, (tokens / limit.max) * 100) };
+  return { label: 'healthBloated', color: 'var(--red)', bg: 'var(--red-l)', pct: 100 };
+}
+
+function renderHealth(foundByTool, uniqueRefs) {
+  const el = document.getElementById('health-section');
+  const foundToolIds = Object.keys(foundByTool);
+  const foundTools = AGENT_TOOLS.filter(t => foundToolIds.includes(t.id));
+  if (!foundTools.length) { el.innerHTML = ''; return; }
+
+  // Per-file health bars
+  const bars = foundTools.map(tool => {
+    const { path, content } = foundByTool[tool.id];
+    const tok = estimateTokens(content);
+    const lim = HEALTH_LIMITS[tool.id] || HEALTH_LIMITS.claude;
+    const g = healthGrade(tok, lim);
+    const warn = lim.note ? `<div style="font-size:.74rem;color:var(--orange);margin-top:4px">${T(lim.note)}</div>` : '';
+    const overMax = tok > lim.max;
+
+    return `
+      <div style="background:var(--card);border-radius:10px;padding:16px 18px;border:1px solid var(--card-border);margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:1.1rem">${tool.icon}</span>
+            <span style="font-family:monospace;font-weight:700;font-size:.85rem">${path}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:.76rem;font-weight:700;color:${g.color}">${T(g.label).toUpperCase()}</span>
+            <span style="font-family:monospace;font-size:.82rem;font-weight:700">${fmtTok(tok)}</span>
+            <span style="font-size:.74rem;color:var(--g400)">/ ${fmtTok(lim.ideal)} ${T('healthIdeal')}</span>
+          </div>
+        </div>
+        <div style="background:var(--g200);border-radius:6px;height:8px;overflow:hidden;position:relative">
+          <div style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100,(lim.ideal/lim.max)*100)}%;border-right:2px dashed var(--g400);z-index:1"></div>
+          <div style="background:${g.color};height:100%;width:${g.pct}%;border-radius:6px;transition:width .3s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px">
+          <span style="font-size:.68rem;color:var(--g400)">0</span>
+          <span style="font-size:.68rem;color:var(--g400)">┆ ${fmtTok(lim.ideal)} ideal</span>
+          <span style="font-size:.68rem;color:var(--g400)">┆ ${fmtTok(lim.warn)} warn</span>
+          <span style="font-size:.68rem;color:var(--g400)">${fmtTok(lim.max)}</span>
+        </div>
+        ${overMax ? `<div style="font-size:.74rem;color:var(--red);font-weight:700;margin-top:4px">⚠ Exceeds recommended maximum (${fmtTok(lim.max)})</div>` : ''}
+        ${warn}
+      </div>`;
+  }).join('');
+
+  // Total context health (config + refs)
+  const totalTok = calcMaxToolViewTokens(foundByTool, uniqueRefs);
+  const totalIdeal = 8000;
+  const totalWarn = 20000;
+  const totalMax = 50000;
+  const tg = healthGrade(totalTok, { ideal: totalIdeal, warn: totalWarn, max: totalMax });
+
+  el.innerHTML = `
+    <div class="section-header"><h2>${T('hHealth')}</h2></div>
+    <div style="background:var(--card);border-radius:12px;padding:22px;border:1px solid var(--card-border);margin-bottom:20px">
+
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--g200)">
+        <div style="width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;color:${tg.color};background:${tg.bg}">${T(tg.label).charAt(0).toUpperCase()}</div>
+        <div style="flex:1">
+          <div style="font-weight:800;font-size:1rem;margin-bottom:2px">${T('healthTotal')}: <span style="color:${tg.color}">${T(tg.label)}</span></div>
+          <div style="font-family:monospace;font-size:.88rem"><span style="font-weight:700">${fmtTok(totalTok)}</span> <span style="color:var(--g400)">total tokens loaded per request</span></div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:.74rem;color:var(--g500);font-weight:600">${T('healthBaseline')}</div>
+          <div style="font-family:monospace;font-weight:700;font-size:.88rem;color:var(--green)">${fmtTok(totalIdeal)}</div>
+        </div>
+      </div>
+
+      <div style="background:var(--g200);border-radius:6px;height:10px;overflow:hidden;position:relative;margin-bottom:6px">
+        <div style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100,(totalIdeal/totalMax)*100)}%;border-right:2px dashed var(--g400);z-index:1"></div>
+        <div style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100,(totalWarn/totalMax)*100)}%;border-right:2px dashed var(--orange);z-index:1"></div>
+        <div style="background:${tg.color};height:100%;width:${tg.pct}%;border-radius:6px;transition:width .3s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--g400);margin-bottom:18px">
+        <span>0</span>
+        <span>┆ ${fmtTok(totalIdeal)} ideal</span>
+        <span>┆ ${fmtTok(totalWarn)} warn</span>
+        <span>${fmtTok(totalMax)}</span>
+      </div>
+
+      <div style="font-size:.82rem;font-weight:700;color:var(--g700);margin-bottom:10px">${T('healthPerFile')}</div>
+      ${bars}
+    </div>`;
+}
+
+// ══════════════════════════════════════
+// COST CALCULATOR
+// ══════════════════════════════════════
+function recalcCost(){
+  if(!STATE.analyzed)return;
+  updateSliderLabels();
+
+  const modelId=document.getElementById('sel-model').value;
+  const m=PRICING[modelId];
+  const outputTok=parseInt(document.getElementById('sel-output').value);
+  const devs=parseInt(document.getElementById('sl-devs').value);
+  const chats=parseInt(document.getElementById('sl-chats').value);
+  const cacheRate=parseInt(document.getElementById('sl-cache').value)/100;
+  const isBRL=document.getElementById('chk-brl').checked;
+
+  const ctxTok=STATE.totalContextTokens;
+  const cachedTok=Math.round(ctxTok*cacheRate);
+  const uncachedTok=ctxTok-cachedTok;
+
+  // Cost per request (in USD)
+  const inputCost=(uncachedTok/1e6)*m.input;
+  const cacheCost=(cachedTok/1e6)*(m.cacheRead||0);
+  const cacheWriteCost=m.cacheWrite?((cachedTok/1e6)*m.cacheWrite*0.05):0; // ~5% of requests are cache misses/writes
+  const outputCost=(outputTok/1e6)*m.output;
+  const perReq=inputCost+cacheCost+cacheWriteCost+outputCost;
+
+  const perDay=perReq*devs*chats;
+  const perMonth=perDay*22;
+  const perYear=perMonth*12;
+
+  // KPIs
+  document.getElementById('kpi-row').innerHTML=`
+    <div class="kpi blue"><div class="k-num">${fmtTok(ctxTok)}</div><div class="k-label">${T('kpiContext')}</div></div>
+    <div class="kpi green"><div class="k-num">${fmt(perReq)}</div><div class="k-label">${T('kpiReq')}</div></div>
+    <div class="kpi orange"><div class="k-num">${fmt(perDay)}</div><div class="k-label">${T('kpiDay')}</div></div>
+    <div class="kpi purple"><div class="k-num">${fmt(perMonth)}</div><div class="k-label">${T('kpiMonth')}</div></div>
+    <div class="kpi red"><div class="k-num">${fmt(perYear)}</div><div class="k-label">${T('kpiYear')}</div></div>`;
+
+  // Breakdown donut
+  const brkData=[inputCost+cacheWriteCost,cacheCost,outputCost].map(v=>+(v*devs*chats*22).toFixed(2));
+  if(chartBreakdown)chartBreakdown.destroy();
+  chartBreakdown=new Chart(document.getElementById('chart-breakdown'),{type:'doughnut',data:{labels:[T('brkInput'),T('brkCache'),T('brkOutput')],datasets:[{data:brkData,backgroundColor:['#2547f4','#14b8a6','#f59e0b'],borderWidth:2,borderColor:THEME==='dark'?'#0f1629':'#ffffff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11,weight:'bold'},padding:12,color:THEME==='dark'?'#94a3b8':'#475569'}},tooltip:{callbacks:{label:ctx=>ctx.label+': '+fmt(ctx.parsed)}}}}});
+
+  // Per-dev chart
+  const devSteps=[1,5,10,25,50,100].filter(d=>d<=Math.max(devs*2,10));
+  if(!devSteps.includes(devs))devSteps.push(devs);
+  devSteps.sort((a,b)=>a-b);
+  const devCosts=devSteps.map(d=>Math.round(perReq*d*chats*22));
+
+  if(chartPerDev)chartPerDev.destroy();
+  chartPerDev=new Chart(document.getElementById('chart-perdev'),{type:'bar',data:{labels:devSteps.map(d=>d+(LANG==='pt'?' devs':' devs')),datasets:[{label:T('perDevTitle'),data:devCosts,backgroundColor:devSteps.map(d=>d===devs?'#2547f4':'rgba(37,71,244,.35)'),borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.parsed.y)+' '+T('kpiMonth')}}},scales:{y:{ticks:{color:'#64748b',callback:v=>isBRL?'R$'+Math.round(v*BRL_RATE).toLocaleString('pt-BR'):'$'+v.toLocaleString()},grid:{color:THEME==='dark'?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)'}},x:{grid:{display:false},ticks:{color:'#64748b'}}}}});
+
+  // Update scenario card costs
+  function scenarioCost(d,c){const pd=(perReq)*d*c;return pd*22;}
+  const scCosts=[[1,10,'sc-solo-cost'],[5,15,'sc-team-cost'],[20,30,'sc-large-cost']];
+  scCosts.forEach(([d,c,id])=>{const el=document.getElementById(id);if(el)el.textContent=fmt(scenarioCost(d,c));});
+
+  // Comparison table (sortable)
+  const table=document.getElementById('comparison-table');
+  const sym=isBRL?'R$':'$';
+  const colHeaders=[T('thModel'),T('thReq').replace('$',sym),T('thDay').replace('$',sym),T('thMonth').replace('$',sym),T('thYear').replace('$',sym)];
+  const arrow=i=>sortCol===i?(sortDir===1?'▲':'▼'):'⇅';
+  const hdr=`<thead><tr>${colHeaders.map((h,i)=>`<th class="${i?'num':''} sortable" onclick="sortTable(${i})" style="cursor:pointer;user-select:none;white-space:nowrap">${h} <span style="opacity:.4;font-size:.7rem">${arrow(i)}</span></th>`).join('')}</tr></thead>`;
+
+  const rowData=Object.entries(PRICING).map(([id,p])=>{
+    const ic=(uncachedTok/1e6)*p.input;
+    const cc=(cachedTok/1e6)*(p.cacheRead||0);
+    const cw=p.cacheWrite?((cachedTok/1e6)*p.cacheWrite*0.05):0;
+    const oc=(outputTok/1e6)*p.output;
+    const pr=ic+cc+cw+oc;
+    const pd=pr*devs*chats;
+    const pm=pd*22;
+    const py=pm*12;
+    return{id,name:p.name,provider:p.provider,vals:[pr,pd,pm,py]};
+  });
+
+  // Sort
+  if(sortCol===0) rowData.sort((a,b)=>sortDir*a.name.localeCompare(b.name));
+  else rowData.sort((a,b)=>sortDir*(a.vals[sortCol-1]-b.vals[sortCol-1]));
+
+  const rows=rowData.map(r=>{
+    const sel=r.id===modelId?'style="background:var(--blue-l);font-weight:700"':'';
+    return`<tr ${sel}><td>${r.name}<br><span style="font-size:.7rem;color:var(--g500)">${r.provider}</span></td>${r.vals.map(v=>`<td class="num">${fmt(v)}</td>`).join('')}</tr>`;
+  }).join('');
+  table.innerHTML=hdr+'<tbody>'+rows+'</tbody>';
+}
+
+function sortTable(col){
+  if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=col===0?1:-1}
+  recalcCost();
+}
+
+// ══════════════════════════════════════
+// FULLSCREEN VIEWER
+// ══════════════════════════════════════
+let _fsCurrentBlockId = null;
+let _fsCurrentTab = 'rendered';
+
+function openFullscreen(blockId, icon, filePath, isMarkdown) {
+  _fsCurrentBlockId = blockId;
+  _fsCurrentTab = 'rendered';
+  const content = FILE_CONTENTS[blockId] || '';
+  document.getElementById('fs-icon').textContent = icon;
+  document.getElementById('fs-path').textContent = filePath;
+  // Rendered tab
+  const renderedEl = document.getElementById('fs-rendered');
+  renderedEl.innerHTML = isMarkdown
+    ? `<div class="md-body">${renderMd(content)}</div>`
+    : `<div class="raw-code">${content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+  // Raw tab
+  document.getElementById('fs-raw').innerHTML =
+    `<div class="raw-code">${content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+  // Reset tabs
+  document.getElementById('fs-tab-rendered').classList.add('active');
+  document.getElementById('fs-tab-raw').classList.remove('active');
+  document.getElementById('fs-rendered').style.display = '';
+  document.getElementById('fs-raw').style.display = 'none';
+  // Open
+  document.getElementById('fullscreen-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeFullscreen() {
+  document.getElementById('fullscreen-modal').classList.remove('open');
+  document.body.style.overflow = '';
+  _fsCurrentBlockId = null;
+}
+
+function switchFsTab(tab) {
+  _fsCurrentTab = tab;
+  document.getElementById('fs-tab-rendered').classList.toggle('active', tab === 'rendered');
+  document.getElementById('fs-tab-raw').classList.toggle('active', tab === 'raw');
+  document.getElementById('fs-rendered').style.display = tab === 'rendered' ? '' : 'none';
+  document.getElementById('fs-raw').style.display = tab === 'raw' ? '' : 'none';
+}
+
+function copyFsContent() {
+  if (!_fsCurrentBlockId) return;
+  const text = FILE_CONTENTS[_fsCurrentBlockId] || '';
+  const btn = document.getElementById('fs-copy-btn');
+  const finish = () => { btn.textContent = '✓'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = '📋'; btn.classList.remove('copied'); }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(finish).catch(() => { fallbackCopy(text); finish(); });
+  } else { fallbackCopy(text); finish(); }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFullscreen(); });
+
+// ══════════════════════════════════════
+// COPY & TRANSLATE
+// ══════════════════════════════════════
+const FILE_CONTENTS = {};
+
+function getApiKeys() {
+  return {
+    anthropic: localStorage.getItem('al-anthropic-key') || '',
+    openai: localStorage.getItem('al-openai-key') || '',
+    gemini: localStorage.getItem('al-gemini-key') || '',
+  };
+}
+function hasApiKey() {
+  const k = getApiKeys(); return !!(k.anthropic || k.openai || k.gemini);
+}
+
+function showApiKeysModal() {
+  const k = getApiKeys();
+  document.getElementById('ak-anthropic').value = k.anthropic;
+  document.getElementById('ak-openai').value = k.openai;
+  document.getElementById('ak-gemini').value = k.gemini;
+  document.getElementById('api-keys-modal').classList.add('open');
+}
+function closeApiKeysModal() {
+  document.getElementById('api-keys-modal').classList.remove('open');
+}
+function saveApiKeys() {
+  const ak = document.getElementById('ak-anthropic').value.trim();
+  const ok = document.getElementById('ak-openai').value.trim();
+  const gk = document.getElementById('ak-gemini').value.trim();
+  if (ak) localStorage.setItem('al-anthropic-key', ak); else localStorage.removeItem('al-anthropic-key');
+  if (ok) localStorage.setItem('al-openai-key', ok); else localStorage.removeItem('al-openai-key');
+  if (gk) localStorage.setItem('al-gemini-key', gk); else localStorage.removeItem('al-gemini-key');
+  closeApiKeysModal();
+  // Re-render to show/hide translate buttons
+  const repo = currentLocalRepo();
+  if (repo) renderDetection(repo.foundByTool || {}, repo.uniqueRefs || [], repo.repoName || '');
+}
+
+function copyBlock(blockId) {
+  const text = FILE_CONTENTS[blockId] || '';
+  const btn = document.querySelector('#' + blockId + ' .copy-btn');
+  const finish = () => { if (btn) { btn.textContent = '✓'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = '📋'; btn.classList.remove('copied'); }, 1500); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(finish).catch(() => { fallbackCopy(text); finish(); });
+  } else { fallbackCopy(text); finish(); }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea'); ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta);
+  ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+}
+
+function toggleTranslatePanel(blockId) {
+  const panel = document.getElementById('tp-' + blockId);
+  if (panel) panel.classList.toggle('open');
+}
+
+async function runTranslate(blockId) {
+  const text = FILE_CONTENTS[blockId] || '';
+  if (!text.trim()) return;
+  const dir = document.getElementById('td-' + blockId).value;
+  const result = document.getElementById('tr-' + blockId);
+  const status = document.getElementById('ts-' + blockId);
+  const btn = document.querySelector('#tp-' + blockId + ' .t-run-btn');
+
+  result.classList.remove('show'); result.textContent = '';
+  status.textContent = '⏳ ' + T('translating'); status.classList.add('show');
+  if (btn) btn.disabled = true;
+
+  const prompt = dir === 'en'
+    ? 'Translate the following from Portuguese to English. Preserve all formatting, code blocks, lists, and technical terms exactly. Return only the translated content, no preamble.\n\n' + text
+    : 'Translate the following from English to Portuguese. Preserve all formatting, code blocks, lists, and technical terms exactly. Return only the translated content, no preamble.\n\n' + text;
+
+  try {
+    const translated = await callTranslationApi(prompt);
+    result.textContent = translated; result.classList.add('show');
+    status.classList.remove('show');
+  } catch (e) {
+    status.textContent = '❌ ' + (e.message || 'Translation failed');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function callTranslationApi(prompt) {
+  const k = getApiKeys();
+  if (k.anthropic) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': k.anthropic, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error('Anthropic ' + res.status + (e.error ? ': ' + e.error.message : '')); }
+    const data = await res.json(); return data.content[0].text;
+  }
+  if (k.openai) {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + k.openai },
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }] }),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error('OpenAI ' + res.status + (e.error ? ': ' + e.error.message : '')); }
+    const data = await res.json(); return data.choices[0].message.content;
+  }
+  if (k.gemini) {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + k.gemini, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error('Gemini ' + res.status + (e.error ? ': ' + e.error.message : '')); }
+    const data = await res.json(); return data.candidates[0].content.parts[0].text;
+  }
+  throw new Error(T('noApiKey'));
+}
+
+// ══════════════════════════════════════
+// THEME
+// ══════════════════════════════════════
+let THEME = localStorage.getItem('al-theme') || 'dark';
+function applyTheme(t) {
+  THEME = t;
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('theme-toggle-btn').textContent = t === 'dark' ? '☀️' : '🌙';
+  localStorage.setItem('al-theme', t);
+  // Refresh charts with new theme colors
+  if (typeof recalcCost === 'function') try { recalcCost(); } catch(e) {}
+  if (typeof renderCompareResults === 'function') try { renderCompareResults(); } catch(e) {}
+}
+function toggleTheme() { applyTheme(THEME === 'dark' ? 'light' : 'dark'); }
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+document.getElementById('repo-url').addEventListener('keydown',e=>{if(e.key==='Enter')analyze()})
+document.getElementById('cmp-url').addEventListener('keydown',e=>{if(e.key==='Enter')addToCompare()});
+document.getElementById('org-area-url').addEventListener('keydown',e=>{if(e.key==='Enter')addOrgFromArea()});
+applyTheme(THEME);
+applyI18N();
+(async function initLocalWorkspace(){
+  renderLocalWorkspace();
+  renderCmpQueue();
+  renderSavedComparisons();
+  await loadBootstrapReport();
+  renderLocalWorkspace();
+  renderCmpQueue();
+  renderSavedComparisons();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "repos": [
+    { "path": ".", "name": "AgentLens" }
+  ],
+  "baselines": [
+    "anthropics/anthropic-cookbook",
+    "openai/openai-agents-python",
+    "microsoft/vscode",
+    "openclaw/openclaw",
+    "microsoft/aspire",
+    "can1357/oh-my-pi",
+    "TEN-framework/ten-framework",
+    "openclaw/skills",
+    "redis/agent-skills",
+    "AnInsomniacy/motrix-next"
+  ],
+  "output": "agentlens-report.html"
+}
