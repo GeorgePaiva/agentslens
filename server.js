@@ -21,11 +21,18 @@ function readBody(req) {
   });
 }
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
 function send(res, status, body) {
   const json = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(json),
+    ...CORS_HEADERS,
   });
   res.end(json);
 }
@@ -34,7 +41,22 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const parts = url.pathname.replace(/^\/|\/$/g, '').split('/');
 
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS_HEADERS);
+    res.end();
+    return;
+  }
+
   try {
+    if (req.method === 'POST' && parts[0] === 'github') {
+      const body = await readBody(req);
+      if (!body.repoId) return send(res, 400, { error: 'repoId é obrigatório' });
+      if (!body.name) return send(res, 400, { error: 'name é obrigatório' });
+      if (!body.result) return send(res, 400, { error: 'result é obrigatório' });
+      const id = db.saveAnalysis({ repo_path: body.repoId, repo_name: body.name, cli_version: VERSION, result: body.result });
+      return send(res, 200, { id, repo_name: body.name, repo_path: body.repoId });
+    }
+
     if (req.method === 'POST' && parts[0] === 'analyze') {
       const body = await readBody(req);
       if (!body.path) return send(res, 400, { error: 'path é obrigatório' });

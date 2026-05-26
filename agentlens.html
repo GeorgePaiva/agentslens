@@ -533,6 +533,7 @@ footer a{color:var(--g500);text-decoration:none}.footer a:hover{color:var(--cyan
       <button class="area-tab" onclick="setArea('compare')" id="area-tab-compare"></button>
       <button class="area-tab" onclick="setArea('org')" id="area-tab-org"></button>
       <button class="area-tab" onclick="setArea('reports')" id="area-tab-reports"></button>
+      <button class="area-tab" onclick="setArea('history')" id="area-tab-history"></button>
     </div>
     <div class="hero-controls">
       <button class="settings-btn" onclick="showApiKeysModal()" title="API Keys">🔑</button>
@@ -541,6 +542,7 @@ footer a{color:var(--g500);text-decoration:none}.footer a:hover{color:var(--cyan
         <button class="lang-btn active" onclick="setLang('pt')">PT</button>
       </div>
       <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+      <span id="server-status" style="font-size:.72rem;font-weight:700;color:var(--g500);padding:0 2px" title=""></span>
     </div>
   </div>
   <p id="hero-sub" class="hero-sub"></p>
@@ -886,6 +888,13 @@ footer a{color:var(--g500);text-decoration:none}.footer a:hover{color:var(--cyan
     <input class="hidden-input" id="comparison-input" type="file" accept="application/json,.json" onchange="handleComparisonImport(event)">
   </div><!-- end #area-reports -->
 
+  <!-- HISTORY AREA -->
+  <div id="area-history" class="hidden">
+    <div class="compare-card" style="margin-top:20px">
+      <div id="history-list"></div>
+    </div>
+  </div><!-- end #area-history -->
+
 </div>
 
 <footer>
@@ -1075,6 +1084,9 @@ const I18N = {
     areaCompare: '⚖️ Compare',
     areaOrg: '🏢 Organization',
     areaReports: '📁 Reports',
+    areaHistory: '🕘 History',
+    historyEmpty: 'No analyses saved yet. Analyze a repo to start building your knowledge base.',
+    historyNoServer: 'Start the local server (node server.js) to enable history.',
     coverageMatrixTitle: 'Agent Coverage',
     scenarioSoloName: 'Solo Dev',
     scenarioSoloDesc: '1 dev · 10 chats/day',
@@ -1272,6 +1284,9 @@ const I18N = {
     areaCompare: '⚖️ Comparar',
     areaOrg: '🏢 Organização',
     areaReports: '📁 Relatórios',
+    areaHistory: '🕘 Histórico',
+    historyEmpty: 'Nenhuma análise salva ainda. Analise um repositório para começar a construir sua base de conhecimento.',
+    historyNoServer: 'Inicie o servidor local (node server.js) para habilitar o histórico.',
     coverageMatrixTitle: 'Cobertura de Agentes',
     scenarioSoloName: 'Dev Solo',
     scenarioSoloDesc: '1 dev · 10 chats/dia',
@@ -1320,6 +1335,7 @@ function applyI18N() {
   document.getElementById('area-tab-compare').textContent = T('areaCompare');
   document.getElementById('area-tab-org').textContent = T('areaOrg');
   document.getElementById('area-tab-reports').textContent = T('areaReports');
+  document.getElementById('area-tab-history').textContent = T('areaHistory');
   document.getElementById('lbl-local-workspace').textContent = T('localWorkspace');
   document.getElementById('btn-open-folder').textContent = T('openFolder');
   document.getElementById('btn-import-report').textContent = T('importReport');
@@ -1723,6 +1739,7 @@ async function analyze(){
   recalcCost();
   btn.disabled=false;document.getElementById('btn-icon').textContent='🔍';document.getElementById('btn-text').textContent=T('btnAnalyze');
   document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+  saveGithubAnalysis(`${owner}/${repo}`,repo,data);
 }
 
 // ══════════════════════════════════════
@@ -1981,14 +1998,108 @@ async function loadBootstrapReport(){
 }
 
 // ══════════════════════════════════════
+// SERVER INTEGRATION
+// ══════════════════════════════════════
+let SERVER_URL=null;
+
+async function tryConnectServer(){
+  try{
+    const res=await fetch('http://localhost:3000/history',{signal:AbortSignal.timeout(1500)});
+    if(res.ok){
+      SERVER_URL='http://localhost:3000';
+      const el=document.getElementById('server-status');
+      el.textContent='🟢';
+      el.title='Connected to local server (node server.js)';
+    }
+  }catch(_){}
+}
+
+function serializeForSave(data){
+  return{
+    ...data,
+    uniqueRefs:data.uniqueRefs?data.uniqueRefs.map(r=>({...r,fromTools:r.fromTools instanceof Set?Array.from(r.fromTools):r.fromTools})):[]
+  };
+}
+
+async function saveGithubAnalysis(repoId,name,result){
+  if(!SERVER_URL)return;
+  try{
+    await fetch(`${SERVER_URL}/github`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({repoId,name,result:serializeForSave(result)})
+    });
+  }catch(_){}
+}
+
+async function renderHistory(){
+  const el=document.getElementById('history-list');
+  if(!SERVER_URL){
+    el.innerHTML=`<p style="color:var(--g500);text-align:center;padding:24px">${T('historyNoServer')}</p>`;
+    return;
+  }
+  el.innerHTML=`<p style="color:var(--g500);padding:12px">…</p>`;
+  try{
+    const res=await fetch(`${SERVER_URL}/history`);
+    const items=await res.json();
+    if(!items.length){
+      el.innerHTML=`<p style="color:var(--g500);text-align:center;padding:24px">${T('historyEmpty')}</p>`;
+      return;
+    }
+    el.innerHTML=items.map(item=>`
+      <div class="local-repo-tab" onclick="loadHistoryItem(${item.id})">
+        <div>
+          <div class="lrt-name">${esc(item.repo_name)}</div>
+          <div class="lrt-tok">${esc(item.repo_path)} · ${new Date(item.created_at).toLocaleString()}</div>
+        </div>
+        <button style="border:none;background:none;cursor:pointer;color:var(--g500);font-size:.85rem;padding:4px 8px" onclick="event.stopPropagation();deleteHistoryItem(${item.id})" title="Delete">✕</button>
+      </div>`).join('');
+  }catch(_){
+    el.innerHTML=`<p style="color:var(--red,#f44);padding:12px">Error loading history</p>`;
+  }
+}
+
+async function loadHistoryItem(id){
+  if(!SERVER_URL)return;
+  try{
+    const res=await fetch(`${SERVER_URL}/history/${id}`);
+    if(!res.ok)return;
+    const row=await res.json();
+    const data=row.result;
+    if(!data)return;
+    if(data.uniqueRefs)data.uniqueRefs.forEach(r=>{if(Array.isArray(r.fromTools))r.fromTools=new Set(r.fromTools);});
+    STATE.analyzed=true;
+    STATE.totalContextTokens=data.totalContextTokens||0;
+    STATE.foundByTool=data.foundByTool||{};
+    STATE.uniqueRefs=data.uniqueRefs||[];
+    setArea('analyze');
+    renderDetection(data.foundByTool,data.uniqueRefs,data.branch||'');
+    renderDetectionExtras(row.repo_path,data.foundByTool,data.totalContextTokens||0);
+    document.getElementById('results').classList.remove('hidden');
+    document.getElementById('empty-state').classList.add('hidden');
+    recalcCost();
+    document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(_){}
+}
+
+async function deleteHistoryItem(id){
+  if(!SERVER_URL)return;
+  try{
+    await fetch(`${SERVER_URL}/history/${id}`,{method:'DELETE'});
+    renderHistory();
+  }catch(_){}
+}
+
+// ══════════════════════════════════════
 // AREA SWITCHER
 // ══════════════════════════════════════
 function setArea(area){
-  ['analyze','compare','org','reports'].forEach(a=>{
+  ['analyze','compare','org','reports','history'].forEach(a=>{
     document.getElementById(`area-${a}`).classList.toggle('hidden',a!==area);
     document.getElementById(`area-tab-${a}`).classList.toggle('active',a===area);
   });
   if(area==='compare'&&COMPARE_STATE.results.length)renderCompareResults();
+  if(area==='history')renderHistory();
 }
 function setMode(mode){setArea(mode==='compare'?'compare':'analyze')}
 
@@ -3274,6 +3385,7 @@ applyI18N();
   renderLocalWorkspace();
   renderCmpQueue();
   renderSavedComparisons();
+  tryConnectServer();
 })();
 </script>
 </body>
