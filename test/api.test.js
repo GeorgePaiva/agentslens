@@ -188,3 +188,60 @@ test('DELETE /history/:id remove entrada do /github', async () => {
   const get = await request('GET', `/history/${id}`);
   assert.equal(get.status, 404);
 });
+
+test('DELETE /history/:id com id inexistente retorna 404', async () => {
+  const res = await request('DELETE', '/history/999999');
+  assert.equal(res.status, 404);
+  assert.ok(res.body.error);
+});
+
+test('rota desconhecida retorna 404', async () => {
+  const res = await request('GET', '/rota-inexistente');
+  assert.equal(res.status, 404);
+  assert.ok(res.body.error);
+});
+
+test('POST /analyze com body JSON inválido retorna 500', async () => {
+  const res = await new Promise((resolve, reject) => {
+    const payload = 'isso nao e json';
+    const url = new URL('/analyze', baseUrl);
+    const options = {
+      method: 'POST',
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname,
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    };
+    const req = http.request(options, r => {
+      let data = '';
+      r.on('data', chunk => { data += chunk; });
+      r.on('end', () => {
+        try { resolve({ status: r.statusCode, body: JSON.parse(data) }); }
+        catch (_) { resolve({ status: r.statusCode, body: data }); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+  assert.equal(res.status, 500);
+  assert.ok(res.body.error);
+});
+
+test('POST /analyze com name customizado retorna esse nome', async () => {
+  const res = await request('POST', '/analyze', { path: path.resolve('.'), name: 'meu-repo-custom' });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.repoName, 'meu-repo-custom');
+});
+
+test('POST /analyze retorna header Access-Control-Allow-Origin', async () => {
+  const res = await request('POST', '/analyze', { path: path.resolve('.') });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers['access-control-allow-origin'], '*');
+});
+
+test('POST /github retorna header Access-Control-Allow-Origin', async () => {
+  const res = await request('POST', '/github', { repoId: 'owner/cors-test', name: 'cors-test', result: {} });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers['access-control-allow-origin'], '*');
+});
