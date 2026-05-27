@@ -245,3 +245,47 @@ test('POST /github retorna header Access-Control-Allow-Origin', async () => {
   assert.equal(res.status, 200);
   assert.equal(res.headers['access-control-allow-origin'], '*');
 });
+
+test('respostas JSON têm Content-Type application/json', async () => {
+  const res = await request('GET', '/history');
+  assert.ok(res.headers['content-type'].includes('application/json'));
+});
+
+test('GET /history retorna entradas em ordem decrescente de id', async () => {
+  await request('POST', '/github', { repoId: 'owner/order-a', name: 'order-a', result: {} });
+  await request('POST', '/github', { repoId: 'owner/order-b', name: 'order-b', result: {} });
+  const res = await request('GET', '/history');
+  assert.equal(res.status, 200);
+  const ids = res.body.map(e => e.id);
+  for (let i = 1; i < ids.length; i++) {
+    assert.ok(ids[i - 1] >= ids[i], 'ids devem estar em ordem decrescente');
+  }
+});
+
+test('GET /history items têm campos de metadados esperados', async () => {
+  await request('POST', '/github', { repoId: 'owner/meta', name: 'meta', result: {} });
+  const res = await request('GET', '/history');
+  const item = res.body[0];
+  assert.ok('id' in item, 'deve ter id');
+  assert.ok('created_at' in item, 'deve ter created_at');
+  assert.ok('repo_name' in item, 'deve ter repo_name');
+  assert.ok('repo_path' in item, 'deve ter repo_path');
+  assert.ok('cli_version' in item, 'deve ter cli_version');
+});
+
+test('POST /analyze retorna foundByTool e uniqueRefs na resposta', async () => {
+  const res = await request('POST', '/analyze', { path: path.resolve('.') });
+  assert.equal(res.status, 200);
+  assert.ok(res.body.foundByTool !== undefined, 'deve ter foundByTool');
+  assert.ok(Array.isArray(res.body.uniqueRefs), 'deve ter uniqueRefs como array');
+});
+
+test('DELETE /history/:id duas vezes retorna 404 na segunda', async () => {
+  const post = await request('POST', '/github', { repoId: 'owner/double-del', name: 'double-del', result: {} });
+  const id = post.body.id;
+  const first = await request('DELETE', `/history/${id}`);
+  assert.equal(first.status, 200);
+  const second = await request('DELETE', `/history/${id}`);
+  assert.equal(second.status, 404);
+  assert.ok(second.body.error);
+});
