@@ -9,13 +9,24 @@ const db = require('./db');
 
 const PORT = process.env.PORT || 3000;
 
+const MAX_BODY_BYTES = 1 * 1024 * 1024;
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', chunk => { data += chunk; });
+    let bytes = 0;
+    const chunks = [];
+    req.on('data', chunk => {
+      bytes += chunk.length;
+      if (bytes > MAX_BODY_BYTES) {
+        req.destroy();
+        return reject(Object.assign(new Error('payload muito grande'), { statusCode: 413 }));
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => {
+      const data = Buffer.concat(chunks).toString('utf8');
       try { resolve(JSON.parse(data || '{}')); }
-      catch (e) { reject(new Error('JSON inválido no body')); }
+      catch (e) { reject(Object.assign(new Error('JSON inválido no body'), { statusCode: 400 })); }
     });
     req.on('error', reject);
   });
@@ -72,20 +83,24 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && parts[0] === 'history' && parts[1]) {
-      const row = db.getAnalysis(Number(parts[1]));
+      const id = Number(parts[1]);
+      if (!Number.isInteger(id) || id <= 0) return send(res, 400, { error: 'id inválido' });
+      const row = db.getAnalysis(id);
       if (!row) return send(res, 404, { error: 'análise não encontrada' });
       return send(res, 200, row);
     }
 
     if (req.method === 'DELETE' && parts[0] === 'history' && parts[1]) {
-      const deleted = db.deleteAnalysis(Number(parts[1]));
+      const id = Number(parts[1]);
+      if (!Number.isInteger(id) || id <= 0) return send(res, 400, { error: 'id inválido' });
+      const deleted = db.deleteAnalysis(id);
       if (!deleted) return send(res, 404, { error: 'análise não encontrada' });
       return send(res, 200, { deleted: true });
     }
 
     send(res, 404, { error: 'rota não encontrada' });
   } catch (e) {
-    send(res, 500, { error: e.message });
+    send(res, e.statusCode || 500, { error: e.message });
   }
 });
 

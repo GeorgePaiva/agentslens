@@ -33,7 +33,7 @@ function saveAnalysis({ repo_path, repo_name, cli_version, result }) {
 
 function listAnalyses() {
   return getDb()
-    .prepare('SELECT id, created_at, repo_name, repo_path, cli_version FROM analyses ORDER BY id DESC')
+    .prepare("SELECT id, created_at, repo_name, repo_path, cli_version, json_extract(result_json,'$.totalContextTokens') as total_context_tokens FROM analyses ORDER BY id DESC")
     .all();
 }
 

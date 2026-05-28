@@ -469,6 +469,28 @@ footer a{color:var(--g500);text-decoration:none}.footer a:hover{color:var(--cyan
   .hero-controls{width:100%;justify-content:flex-end;flex-wrap:wrap}
   .lang-toggle{order:3}
 }
+/* HISTORY */
+.history-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+.history-header h3{font-size:.95rem;font-weight:800;color:var(--g900)}
+.history-refresh-btn{padding:5px 12px;border:1px solid var(--card-border);border-radius:8px;font-size:.78rem;font-weight:700;background:var(--card-alt);color:var(--g700);cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:.15s}
+.history-refresh-btn:hover{border-color:rgba(37,71,244,.4);color:var(--cyan)}
+.history-item{background:var(--card-alt);border:1px solid var(--card-border);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;margin-bottom:8px;transition:.15s;cursor:pointer}
+.history-item:hover{border-color:rgba(37,71,244,.4);background:rgba(37,71,244,.06)}
+.history-item:last-child{margin-bottom:0}
+.history-item-body{flex:1;min-width:0}
+.history-item-name{font-family:monospace;font-weight:700;font-size:.88rem;color:var(--g900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-item-meta{font-size:.74rem;color:var(--g500);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-item-badge{background:var(--blue-l);color:var(--blue);border:1px solid rgba(37,71,244,.2);border-radius:99px;padding:2px 9px;font-size:.72rem;font-weight:700;white-space:nowrap;flex-shrink:0}
+.history-delete-btn{background:none;border:1px solid transparent;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:.85rem;color:var(--g400);transition:.15s;flex-shrink:0;line-height:1}
+.history-delete-btn:hover{background:var(--red-l);border-color:rgba(239,68,68,.25);color:var(--red)}
+.history-loading-item{display:flex;align-items:center;gap:10px;padding:12px 14px;color:var(--g500);font-size:.88rem}
+.server-status-pill{display:flex;align-items:center;gap:5px;font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap;transition:.3s}
+.server-status-pill.online{background:rgba(16,185,129,.12);color:var(--green);border:1px solid rgba(16,185,129,.25)}
+.server-status-pill.offline{background:rgba(255,255,255,.05);color:var(--g500);border:1px solid rgba(255,255,255,.08)}
+.server-status-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.server-status-pill.online .server-status-dot{background:var(--green);box-shadow:0 0 5px var(--green)}
+.server-status-pill.offline .server-status-dot{background:var(--g400)}
+[data-theme="light"] .server-status-pill.online .server-status-dot{box-shadow:none}
 /* FULLSCREEN MODAL */
 .fullscreen-modal{position:fixed;inset:0;z-index:900;background:var(--bg);display:none;flex-direction:column;animation:fs-in .15s ease}
 .fullscreen-modal.open{display:flex}
@@ -542,7 +564,7 @@ footer a{color:var(--g500);text-decoration:none}.footer a:hover{color:var(--cyan
         <button class="lang-btn active" onclick="setLang('pt')">PT</button>
       </div>
       <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
-      <span id="server-status" style="font-size:.72rem;font-weight:700;color:var(--g500);padding:0 2px" title=""></span>
+      <span id="server-status"></span>
     </div>
   </div>
   <p id="hero-sub" class="hero-sub"></p>
@@ -891,6 +913,10 @@ footer a{color:var(--g500);text-decoration:none}.footer a:hover{color:var(--cyan
   <!-- HISTORY AREA -->
   <div id="area-history" class="hidden">
     <div class="compare-card" style="margin-top:20px">
+      <div class="history-header">
+        <h3 id="h-history-title"></h3>
+        <button class="history-refresh-btn" id="history-refresh-btn" onclick="renderHistory()">↻</button>
+      </div>
       <div id="history-list"></div>
     </div>
   </div><!-- end #area-history -->
@@ -1087,6 +1113,15 @@ const I18N = {
     areaHistory: '🕘 History',
     historyEmpty: 'No analyses saved yet. Analyze a repo to start building your knowledge base.',
     historyNoServer: 'Start the local server (node server.js) to enable history.',
+    historyLoadError: 'Error loading history. Is the server running?',
+    historyDeleteConfirm: 'Delete this analysis?',
+    historyDeleting: 'Deleting…',
+    historyDeleteError: 'Failed to delete. Try again.',
+    historySaved: 'Analysis saved to history.',
+    historySaveError: 'Could not save to history.',
+    historyLoading: 'Loading…',
+    serverOnline: 'Server online',
+    serverOffline: 'Server offline',
     coverageMatrixTitle: 'Agent Coverage',
     scenarioSoloName: 'Solo Dev',
     scenarioSoloDesc: '1 dev · 10 chats/day',
@@ -1287,6 +1322,15 @@ const I18N = {
     areaHistory: '🕘 Histórico',
     historyEmpty: 'Nenhuma análise salva ainda. Analise um repositório para começar a construir sua base de conhecimento.',
     historyNoServer: 'Inicie o servidor local (node server.js) para habilitar o histórico.',
+    historyLoadError: 'Erro ao carregar histórico. O servidor está rodando?',
+    historyDeleteConfirm: 'Excluir esta análise?',
+    historyDeleting: 'Excluindo…',
+    historyDeleteError: 'Falha ao excluir. Tente novamente.',
+    historySaved: 'Análise salva no histórico.',
+    historySaveError: 'Não foi possível salvar no histórico.',
+    historyLoading: 'Carregando…',
+    serverOnline: 'Servidor online',
+    serverOffline: 'Servidor offline',
     coverageMatrixTitle: 'Cobertura de Agentes',
     scenarioSoloName: 'Dev Solo',
     scenarioSoloDesc: '1 dev · 10 chats/dia',
@@ -1323,6 +1367,7 @@ function setLang(l) {
   if (COMPARE_STATE.results.length) renderCompareResults();
   if (ORG_SCAN_STATE.done) renderOrgResults();
   if (STATE.analyzed) recalcCost();
+  if (SERVER_URL !== null) setServerStatus(!!SERVER_URL);
 }
 function applyI18N() {
   document.getElementById('hero-sub').textContent = T('heroSub');
@@ -1336,6 +1381,7 @@ function applyI18N() {
   document.getElementById('area-tab-org').textContent = T('areaOrg');
   document.getElementById('area-tab-reports').textContent = T('areaReports');
   document.getElementById('area-tab-history').textContent = T('areaHistory');
+  document.getElementById('h-history-title').textContent = T('areaHistory');
   document.getElementById('lbl-local-workspace').textContent = T('localWorkspace');
   document.getElementById('btn-open-folder').textContent = T('openFolder');
   document.getElementById('btn-import-report').textContent = T('importReport');
@@ -2002,16 +2048,31 @@ async function loadBootstrapReport(){
 // ══════════════════════════════════════
 let SERVER_URL=null;
 
+function setServerStatus(online){
+  const el=document.getElementById('server-status');
+  if(online){
+    el.className='server-status-pill online';
+    el.title=T('serverOnline');
+    el.innerHTML=`<span class="server-status-dot"></span>${T('serverOnline')}`;
+  }else{
+    el.className='server-status-pill offline';
+    el.title=T('serverOffline');
+    el.innerHTML=`<span class="server-status-dot"></span>${T('serverOffline')}`;
+  }
+}
+
 async function tryConnectServer(){
   try{
     const res=await fetch('http://localhost:3000/history',{signal:AbortSignal.timeout(1500)});
     if(res.ok){
       SERVER_URL='http://localhost:3000';
-      const el=document.getElementById('server-status');
-      el.textContent='🟢';
-      el.title='Connected to local server (node server.js)';
+      setServerStatus(true);
+    }else{
+      setServerStatus(false);
     }
-  }catch(_){}
+  }catch(_){
+    setServerStatus(false);
+  }
 }
 
 function serializeForSave(data){
@@ -2023,50 +2084,62 @@ function serializeForSave(data){
 
 async function saveGithubAnalysis(repoId,name,result){
   if(!SERVER_URL)return;
+  const histTab=document.getElementById('area-tab-history');
   try{
-    await fetch(`${SERVER_URL}/github`,{
+    const res=await fetch(`${SERVER_URL}/github`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({repoId,name,result:serializeForSave(result)})
     });
-  }catch(_){}
+    if(!res.ok)throw new Error('save-failed');
+    if(histTab)histTab.title=T('historySaved');
+  }catch(_){
+    if(histTab)histTab.title=T('historySaveError');
+  }
 }
 
 async function renderHistory(){
   const el=document.getElementById('history-list');
   if(!SERVER_URL){
-    el.innerHTML=`<p style="color:var(--g500);text-align:center;padding:24px">${T('historyNoServer')}</p>`;
+    el.innerHTML=`<div class="empty-state"><div class="icon">🔌</div><h3>${T('historyNoServer')}</h3></div>`;
     return;
   }
-  el.innerHTML=`<p style="color:var(--g500);padding:12px">…</p>`;
+  el.innerHTML=`<div class="history-loading-item"><div class="spinner"></div><span>${T('historyLoading')}</span></div>`;
   try{
     const res=await fetch(`${SERVER_URL}/history`);
+    if(!res.ok)throw new Error('fetch-failed');
     const items=await res.json();
     if(!items.length){
-      el.innerHTML=`<p style="color:var(--g500);text-align:center;padding:24px">${T('historyEmpty')}</p>`;
+      el.innerHTML=`<div class="empty-state"><div class="icon">🕘</div><h3>${T('historyEmpty')}</h3></div>`;
       return;
     }
-    el.innerHTML=items.map(item=>`
-      <div class="local-repo-tab" onclick="loadHistoryItem(${item.id})">
-        <div>
-          <div class="lrt-name">${esc(item.repo_name)}</div>
-          <div class="lrt-tok">${esc(item.repo_path)} · ${new Date(item.created_at).toLocaleString()}</div>
+    el.innerHTML=items.map(item=>{
+      const tok=item.total_context_tokens?fmtTok(item.total_context_tokens):'';
+      return`<div class="history-item" onclick="loadHistoryItem(${item.id})">
+        <div class="history-item-body">
+          <div class="history-item-name">${esc(item.repo_name)}</div>
+          <div class="history-item-meta">${esc(item.repo_path)} · ${new Date(item.created_at).toLocaleString()}</div>
         </div>
-        <button style="border:none;background:none;cursor:pointer;color:var(--g500);font-size:.85rem;padding:4px 8px" onclick="event.stopPropagation();deleteHistoryItem(${item.id})" title="Delete">✕</button>
-      </div>`).join('');
+        ${tok?`<span class="history-item-badge">~${tok} tokens</span>`:''}
+        <button class="history-delete-btn" onclick="event.stopPropagation();deleteHistoryItem(${item.id},this)" title="✕" aria-label="Delete">✕</button>
+      </div>`;
+    }).join('');
   }catch(_){
-    el.innerHTML=`<p style="color:var(--red,#f44);padding:12px">Error loading history</p>`;
+    el.innerHTML=`<div class="status-card error" style="margin:0">❌ <span>${T('historyLoadError')}</span></div>`;
   }
 }
 
 async function loadHistoryItem(id){
   if(!SERVER_URL)return;
+  const el=document.getElementById('history-list');
+  const originalHtml=el.innerHTML;
+  el.innerHTML=`<div class="history-loading-item"><div class="spinner"></div><span>${T('historyLoading')}</span></div>`;
   try{
     const res=await fetch(`${SERVER_URL}/history/${id}`);
-    if(!res.ok)return;
+    if(!res.ok)throw new Error('load-failed');
     const row=await res.json();
     const data=row.result;
-    if(!data)return;
+    if(!data){el.innerHTML=originalHtml;return}
     if(data.uniqueRefs)data.uniqueRefs.forEach(r=>{if(Array.isArray(r.fromTools))r.fromTools=new Set(r.fromTools);});
     STATE.analyzed=true;
     STATE.totalContextTokens=data.totalContextTokens||0;
@@ -2079,15 +2152,33 @@ async function loadHistoryItem(id){
     document.getElementById('empty-state').classList.add('hidden');
     recalcCost();
     document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
-  }catch(_){}
+  }catch(_){
+    el.innerHTML=originalHtml;
+  }
 }
 
-async function deleteHistoryItem(id){
+async function deleteHistoryItem(id,btn){
   if(!SERVER_URL)return;
+  if(!confirm(T('historyDeleteConfirm')))return;
+  const item=btn.closest('.history-item');
+  if(item){
+    item.style.opacity='.4';
+    item.style.pointerEvents='none';
+    btn.textContent=T('historyDeleting');
+  }
   try{
-    await fetch(`${SERVER_URL}/history/${id}`,{method:'DELETE'});
+    const res=await fetch(`${SERVER_URL}/history/${id}`,{method:'DELETE'});
+    if(!res.ok)throw new Error('delete-failed');
     renderHistory();
-  }catch(_){}
+  }catch(_){
+    if(item){
+      item.style.opacity='';
+      item.style.pointerEvents='';
+      btn.textContent=T('historyDeleteError');
+      btn.title=T('historyDeleteError');
+      setTimeout(()=>{btn.textContent='✕';btn.title='';},3000);
+    }
+  }
 }
 
 // ══════════════════════════════════════
@@ -3385,6 +3476,7 @@ applyI18N();
   renderLocalWorkspace();
   renderCmpQueue();
   renderSavedComparisons();
+  setServerStatus(false);
   tryConnectServer();
 })();
 </script>
