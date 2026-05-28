@@ -1,4 +1,7 @@
-.DS_Store
 node_modules/
+*.db
+*.db-shm
+*.db-wal
 agentlens-report.html
 agentlens-report.json
+.env
