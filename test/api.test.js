@@ -201,7 +201,7 @@ test('rota desconhecida retorna 404', async () => {
   assert.ok(res.body.error);
 });
 
-test('POST /analyze com body JSON inválido retorna 500', async () => {
+test('POST /analyze com body JSON inválido retorna 400', async () => {
   const res = await new Promise((resolve, reject) => {
     const payload = 'isso nao e json';
     const url = new URL('/analyze', baseUrl);
@@ -224,7 +224,7 @@ test('POST /analyze com body JSON inválido retorna 500', async () => {
     req.write(payload);
     req.end();
   });
-  assert.equal(res.status, 500);
+  assert.equal(res.status, 400);
   assert.ok(res.body.error);
 });
 
@@ -288,4 +288,61 @@ test('DELETE /history/:id duas vezes retorna 404 na segunda', async () => {
   const second = await request('DELETE', `/history/${id}`);
   assert.equal(second.status, 404);
   assert.ok(second.body.error);
+});
+
+test('GET /history/:id com id não-numérico retorna 400', async () => {
+  const res = await request('GET', '/history/abc');
+  assert.equal(res.status, 400);
+  assert.ok(res.body.error);
+});
+
+test('DELETE /history/:id com id não-numérico retorna 400', async () => {
+  const res = await request('DELETE', '/history/abc');
+  assert.equal(res.status, 400);
+  assert.ok(res.body.error);
+});
+
+test('GET /history/:id com id zero retorna 400', async () => {
+  const res = await request('GET', '/history/0');
+  assert.equal(res.status, 400);
+  assert.ok(res.body.error);
+});
+
+test('GET /history/:id com id negativo retorna 400', async () => {
+  const res = await request('GET', '/history/-1');
+  assert.equal(res.status, 400);
+  assert.ok(res.body.error);
+});
+
+test('DELETE /history/:id com id negativo retorna 400', async () => {
+  const res = await request('DELETE', '/history/-1');
+  assert.equal(res.status, 400);
+  assert.ok(res.body.error);
+});
+
+test('POST /github com body JSON inválido retorna 400', async () => {
+  const res = await new Promise((resolve, reject) => {
+    const payload = 'nao e json';
+    const url = new URL('/github', baseUrl);
+    const options = {
+      method: 'POST',
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname,
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    };
+    const req = http.request(options, r => {
+      let data = '';
+      r.on('data', chunk => { data += chunk; });
+      r.on('end', () => {
+        try { resolve({ status: r.statusCode, body: JSON.parse(data) }); }
+        catch (_) { resolve({ status: r.statusCode, body: data }); }
+      });
+    });
+    req.on('error', () => resolve({ status: 0, body: {} }));
+    req.write(payload);
+    req.end();
+  });
+  assert.equal(res.status, 400);
+  assert.ok(res.body.error);
 });
