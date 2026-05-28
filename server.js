@@ -106,7 +106,9 @@ const server = http.createServer(async (req, res) => {
 
 if (require.main === module) {
   server.listen(PORT, () => {
+    const dbPath = process.env.AGENTLENS_DB || require('path').join(process.cwd(), 'agentlens-history.db');
     console.log(`AgentLens server rodando em http://localhost:${PORT}`);
+    console.log(`Banco de dados: ${dbPath}`);
   });
 }
 
