@@ -1,5 +1,7 @@
 # AgentLens
 
+[![CI](https://github.com/GeorgePaiva/agentslens/actions/workflows/ci.yml/badge.svg)](https://github.com/GeorgePaiva/agentslens/actions/workflows/ci.yml)
+
 Scan de repositórios para custos de contexto de agentes de IA. Detecta `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `copilot-instructions.md` e calcula custos de tokens para os principais LLMs.
 
 Funciona de três formas — escolha a que se encaixa no seu fluxo.
@@ -62,13 +64,16 @@ PORT=8080 node server.js    # porta customizada
 
 ### Endpoints
 
-| Método | Rota | Body | Descrição |
+| Método | Rota | Body / Query | Descrição |
 |--------|------|------|-----------|
 | `POST` | `/analyze` | `{ "path": "/caminho/repo", "name"? }` | Analisa repo local, salva e retorna resultado com `id` |
 | `POST` | `/github` | `{ "repoId", "name", "result" }` | Salva análise GitHub enviada pelo app HTML |
-| `GET` | `/history` | — | Lista metadados de todas as análises (inclui `total_context_tokens`) |
+| `GET` | `/history` | `?limit=50&offset=0` | Lista metadados paginados (`{ items, total, limit, offset }`) |
+| `GET` | `/history/search` | `?q=termo` | Filtra análises por nome ou caminho do repo |
 | `GET` | `/history/:id` | — | Análise completa por ID |
 | `DELETE` | `/history/:id` | — | Remove uma análise |
+| `GET` | `/stats` | — | Totais agregados: análises, tokens, última análise |
+| `GET` | `/health` | — | Status do servidor: `{ status, version, uptime }` |
 
 Todos os endpoints retornam JSON e incluem headers CORS (`Access-Control-Allow-Origin: *`), permitindo que o app HTML se conecte ao servidor local sem restrições.
 
