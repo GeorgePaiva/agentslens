@@ -80,7 +80,11 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && parts[0] === 'history' && !parts[1]) {
-      return send(res, 200, db.listAnalyses());
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit')) || 50, 1), 200);
+      const offset = Math.max(parseInt(url.searchParams.get('offset')) || 0, 0);
+      const items = db.listAnalyses({ limit, offset });
+      const total = db.countAnalyses();
+      return send(res, 200, { items, total, limit, offset });
     }
 
     if (req.method === 'GET' && parts[0] === 'history' && parts[1]) {
