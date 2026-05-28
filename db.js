@@ -31,10 +31,14 @@ function saveAnalysis({ repo_path, repo_name, cli_version, result }) {
   return info.lastInsertRowid;
 }
 
-function listAnalyses() {
+function listAnalyses({ limit = 50, offset = 0 } = {}) {
   return getDb()
-    .prepare("SELECT id, created_at, repo_name, repo_path, cli_version, json_extract(result_json,'$.totalContextTokens') as total_context_tokens FROM analyses ORDER BY id DESC")
-    .all();
+    .prepare("SELECT id, created_at, repo_name, repo_path, cli_version, json_extract(result_json,'$.totalContextTokens') as total_context_tokens FROM analyses ORDER BY id DESC LIMIT ? OFFSET ?")
+    .all(limit, offset);
+}
+
+function countAnalyses() {
+  return getDb().prepare('SELECT COUNT(*) as total FROM analyses').get().total;
 }
 
 function getAnalysis(id) {
@@ -56,4 +60,4 @@ function closeDb() {
   }
 }
 
-module.exports = { saveAnalysis, listAnalyses, getAnalysis, deleteAnalysis, closeDb };
+module.exports = { saveAnalysis, listAnalyses, countAnalyses, getAnalysis, deleteAnalysis, closeDb };

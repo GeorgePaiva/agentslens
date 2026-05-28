@@ -75,12 +75,15 @@ test('POST /analyze com path válido retorna 200, salva e retorna id', async () 
   assert.equal(typeof res.body.totalContextTokens, 'number', 'deve retornar totalContextTokens');
 });
 
-test('GET /history retorna array com ao menos um item após POST', async () => {
+test('GET /history retorna objeto paginado com ao menos um item após POST', async () => {
   await request('POST', '/analyze', { path: path.resolve('.') });
   const res = await request('GET', '/history');
   assert.equal(res.status, 200);
-  assert.ok(Array.isArray(res.body), 'deve ser array');
-  assert.ok(res.body.length >= 1, 'deve ter ao menos um item');
+  assert.ok(Array.isArray(res.body.items), 'deve ter items como array');
+  assert.ok(res.body.items.length >= 1, 'deve ter ao menos um item');
+  assert.equal(typeof res.body.total, 'number', 'deve ter total');
+  assert.equal(typeof res.body.limit, 'number', 'deve ter limit');
+  assert.equal(typeof res.body.offset, 'number', 'deve ter offset');
 });
 
 test('GET /history/:id retorna análise completa', async () => {
@@ -163,9 +166,9 @@ test('GET /history lista entradas de /github e /analyze juntas', async () => {
   await request('POST', '/analyze', { path: path.resolve('.') });
   const res = await request('GET', '/history');
   assert.equal(res.status, 200);
-  assert.ok(Array.isArray(res.body));
-  assert.ok(res.body.some(e => e.repo_path === 'owner/mixed'), 'deve conter entrada do github');
-  assert.ok(res.body.some(e => e.repo_path !== 'owner/mixed'), 'deve conter entrada local');
+  assert.ok(Array.isArray(res.body.items));
+  assert.ok(res.body.items.some(e => e.repo_path === 'owner/mixed'), 'deve conter entrada do github');
+  assert.ok(res.body.items.some(e => e.repo_path !== 'owner/mixed'), 'deve conter entrada local');
 });
 
 test('GET /history/:id retorna result completo de entrada do /github', async () => {
@@ -256,7 +259,7 @@ test('GET /history retorna entradas em ordem decrescente de id', async () => {
   await request('POST', '/github', { repoId: 'owner/order-b', name: 'order-b', result: {} });
   const res = await request('GET', '/history');
   assert.equal(res.status, 200);
-  const ids = res.body.map(e => e.id);
+  const ids = res.body.items.map(e => e.id);
   for (let i = 1; i < ids.length; i++) {
     assert.ok(ids[i - 1] >= ids[i], 'ids devem estar em ordem decrescente');
   }
@@ -265,7 +268,7 @@ test('GET /history retorna entradas em ordem decrescente de id', async () => {
 test('GET /history items têm campos de metadados esperados', async () => {
   await request('POST', '/github', { repoId: 'owner/meta', name: 'meta', result: {} });
   const res = await request('GET', '/history');
-  const item = res.body[0];
+  const item = res.body.items[0];
   assert.ok('id' in item, 'deve ter id');
   assert.ok('created_at' in item, 'deve ter created_at');
   assert.ok('repo_name' in item, 'deve ter repo_name');
