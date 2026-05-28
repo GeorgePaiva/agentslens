@@ -60,6 +60,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === 'POST' && !(req.headers['content-type'] || '').includes('application/json')) {
+      return send(res, 415, { error: 'Content-Type deve ser application/json' });
+    }
+
     if (req.method === 'POST' && parts[0] === 'github') {
       const body = await readBody(req);
       if (!body.repoId) return send(res, 400, { error: 'repoId é obrigatório' });
