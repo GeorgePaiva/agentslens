@@ -41,6 +41,13 @@ function countAnalyses() {
   return getDb().prepare('SELECT COUNT(*) as total FROM analyses').get().total;
 }
 
+function searchAnalyses(q) {
+  const like = `%${q}%`;
+  return getDb()
+    .prepare("SELECT id, created_at, repo_name, repo_path, cli_version, json_extract(result_json,'$.totalContextTokens') as total_context_tokens FROM analyses WHERE repo_name LIKE ? OR repo_path LIKE ? ORDER BY id DESC")
+    .all(like, like);
+}
+
 function getAnalysis(id) {
   const row = getDb().prepare('SELECT * FROM analyses WHERE id = ?').get(id);
   if (!row) return null;
@@ -60,4 +67,4 @@ function closeDb() {
   }
 }
 
-module.exports = { saveAnalysis, listAnalyses, countAnalyses, getAnalysis, deleteAnalysis, closeDb };
+module.exports = { saveAnalysis, listAnalyses, countAnalyses, searchAnalyses, getAnalysis, deleteAnalysis, closeDb };

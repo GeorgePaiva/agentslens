@@ -79,6 +79,11 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { id, ...result });
     }
 
+    if (req.method === 'GET' && parts[0] === 'history' && parts[1] === 'search') {
+      const q = url.searchParams.get('q') || '';
+      return send(res, 200, db.searchAnalyses(q));
+    }
+
     if (req.method === 'GET' && parts[0] === 'history' && !parts[1]) {
       const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit')) || 50, 1), 200);
       const offset = Math.max(parseInt(url.searchParams.get('offset')) || 0, 0);
