@@ -41,6 +41,14 @@ function countAnalyses() {
   return getDb().prepare('SELECT COUNT(*) as total FROM analyses').get().total;
 }
 
+function getStats() {
+  const db = getDb();
+  const { total } = db.prepare('SELECT COUNT(*) as total FROM analyses').get();
+  const { total_tokens } = db.prepare("SELECT COALESCE(SUM(json_extract(result_json,'$.totalContextTokens')),0) as total_tokens FROM analyses").get();
+  const { last_created_at } = db.prepare('SELECT MAX(created_at) as last_created_at FROM analyses').get();
+  return { total_analyses: total, total_tokens_analyzed: total_tokens, last_analysis_at: last_created_at };
+}
+
 function searchAnalyses(q) {
   const like = `%${q}%`;
   return getDb()
@@ -67,4 +75,4 @@ function closeDb() {
   }
 }
 
-module.exports = { saveAnalysis, listAnalyses, countAnalyses, searchAnalyses, getAnalysis, deleteAnalysis, closeDb };
+module.exports = { saveAnalysis, listAnalyses, countAnalyses, getStats, searchAnalyses, getAnalysis, deleteAnalysis, closeDb };

@@ -108,6 +108,10 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { deleted: true });
     }
 
+    if (req.method === 'GET' && parts[0] === 'stats') {
+      return send(res, 200, db.getStats());
+    }
+
     if (req.method === 'GET' && parts[0] === 'health') {
       return send(res, 200, { status: 'ok', version: VERSION, uptime: Math.floor((Date.now() - START_TIME) / 1000) });
     }
