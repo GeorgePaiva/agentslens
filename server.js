@@ -8,6 +8,7 @@ const { version: VERSION } = require('./package.json');
 const db = require('./db');
 
 const PORT = process.env.PORT || 3000;
+const START_TIME = Date.now();
 
 const MAX_BODY_BYTES = 1 * 1024 * 1024;
 
@@ -96,6 +97,10 @@ const server = http.createServer(async (req, res) => {
       const deleted = db.deleteAnalysis(id);
       if (!deleted) return send(res, 404, { error: 'análise não encontrada' });
       return send(res, 200, { deleted: true });
+    }
+
+    if (req.method === 'GET' && parts[0] === 'health') {
+      return send(res, 200, { status: 'ok', version: VERSION, uptime: Math.floor((Date.now() - START_TIME) / 1000) });
     }
 
     send(res, 404, { error: 'rota não encontrada' });
