@@ -14,6 +14,7 @@ Zero instalação. Baixe `agentlens.html`, abra no browser.
 - Carrega relatórios `.json` gerados pelo CLI
 - Toggle de idioma PT/EN
 - Aba Compare para comparar múltiplos repos
+- **Aba Histórico**: conecta automaticamente ao servidor local e exibe todas as análises salvas com contagem de tokens, opção de recarregar e deleção com confirmação
 
 ```
 1. Baixe agentlens.html
@@ -21,7 +22,7 @@ Zero instalação. Baixe `agentlens.html`, abra no browser.
 3. Cole: https://github.com/owner/repo → Analisar
 ```
 
-All processing happens in your browser via the GitHub public API.
+All processing happens in your browser via the GitHub public API. Se o servidor local estiver rodando, análises GitHub são salvas automaticamente e ficam disponíveis na aba Histórico.
 
 ---
 
@@ -51,7 +52,7 @@ Gera `agentlens-report.html` e `agentlens-report.json` no diretório atual.
 
 ## Servidor com histórico
 
-API REST HTTP que analisa repositórios e persiste os resultados em banco de dados SQLite local.
+API REST HTTP que analisa repositórios locais e persiste os resultados em banco de dados SQLite. O app HTML detecta o servidor automaticamente e habilita a aba Histórico.
 
 ```bash
 npm install
@@ -61,16 +62,21 @@ PORT=8080 node server.js    # porta customizada
 
 ### Endpoints
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `POST` | `/analyze` | `{ "path": "/caminho/repo" }` — analisa e salva |
-| `GET` | `/history` | Lista todas as análises salvas |
-| `GET` | `/history/:id` | Análise completa por ID |
-| `DELETE` | `/history/:id` | Remove uma análise |
+| Método | Rota | Body | Descrição |
+|--------|------|------|-----------|
+| `POST` | `/analyze` | `{ "path": "/caminho/repo", "name"? }` | Analisa repo local, salva e retorna resultado com `id` |
+| `POST` | `/github` | `{ "repoId", "name", "result" }` | Salva análise GitHub enviada pelo app HTML |
+| `GET` | `/history` | — | Lista metadados de todas as análises (inclui `total_context_tokens`) |
+| `GET` | `/history/:id` | — | Análise completa por ID |
+| `DELETE` | `/history/:id` | — | Remove uma análise |
 
-O app HTML pode ser apontado para `GET /history` para exibir o histórico de análises salvas.
+Todos os endpoints retornam JSON e incluem headers CORS (`Access-Control-Allow-Origin: *`), permitindo que o app HTML se conecte ao servidor local sem restrições.
 
-O banco de dados fica em `agentlens-history.db` no diretório de trabalho. Cada análise salva a versão do CLI (`cliVersion`) para rastrear compatibilidade entre versões.
+O banco de dados fica em `agentlens-history.db` no diretório de trabalho. Para usar um caminho diferente, defina a variável de ambiente `AGENTLENS_DB`.
+
+```bash
+AGENTLENS_DB=/tmp/meu-banco.db node server.js
+```
 
 ---
 
@@ -80,7 +86,10 @@ O banco de dados fica em `agentlens-history.db` no diretório de trabalho. Cada 
 npm test
 ```
 
-Roda testes unitários do core e testes de integração da API com `node:test` nativo (Node.js ≥ 18, sem dependências extras).
+50 testes com `node:test` nativo (Node.js ≥ 18, sem dependências extras):
+
+- **`test/core.test.js`** — testes unitários de `AGENT_TOOLS`, `PRICING`, `HEALTH_LIMITS`, `parseReferences` e `analyzeLocalRepo`
+- **`test/api.test.js`** — testes de integração da API: todos os endpoints, validação de inputs, CORS, IDs inválidos (string, zero, negativo), JSON malformado, ordenação do histórico
 
 ---
 
